@@ -17,56 +17,19 @@ Full design rationale: [`docs/design_details.md`](docs/design_details.md). Linea
 
 ---
 
-## 1. Source analysis
+## 1. Source analysis (short)
 
-Ten table specs and an ERD were provided; **no data rows**. The specs are treated as the source
-contract and exercised with synthetic data (`seeds/generate_seeds.py`).
+Ten table specs and an ERD were provided; **no data rows**. The specs are the source contract and
+are exercised with synthetic data (`seeds/generate_seeds.py`, with planted defects). Staging fixes
+what the specs imply: INTEGER/STRING FK mismatch, DATETIME columns without a zone, `founded` as a
+free string, redundant status columns, orphaned keys.
 
-What the specs say vs. how the warehouse treats it (each handled explicitly in staging):
+"Repayments" and a credit score are required by the task but have no source table, so three
+minimal entities are *proposed* and kept separate in `seeds/proposed/`: `repayment_schedule`,
+`repayment`, `credit_assessment`. The status vocabulary is not given either; it lives in one
+mapping seed (`seeds/reference/ref_movement_status_map.csv`).
 
-| Spec | Treatment |
-|---|---|
-| `loan.movement_status_id` is INTEGER, `movement_status.movement_id` is STRING | cast in `stg_loan`; relationship test |
-| `individual`, `company`, `insurance` use DATETIME (no zone); other tables TIMESTAMP | -> UTC with a fixed UTC+7 offset (assumed Jakarta; `source_utc_offset_hours` var) |
-| `loan.movement_status_id` and `loan_movement` both describe status | history is the source of truth; disagreement is surfaced by `fact_loan.has_status_mismatch` (warn) |
-| `company.founded` is a free STRING | three shapes parsed (`YYYY`, `YYYY-MM-DD`, `MM/YYYY`); other shapes -> NULL |
-| `fund.fund_ratio` "ratio of funds contributed by the lender" | read as the lender's share of the loan, expected to sum to 1 (warn test) |
-| `is_borrower` / `is_lender` on both `individual` and `company` | one `dim_customer` with `entity_type` and `customer_role` |
-| foreign keys may be orphaned | `UNKNOWN` member in every dimension; facts never carry NULL keys |
-
-**Gaps the task requires us to fill.** "Repayments" and a credit score are required but have no
-source table. Three minimal entities are *proposed* (kept separate in `seeds/proposed/`):
-`repayment_schedule` (expected installments; lump sum = 1 row), `repayment` (raw transfers, not
-pre-allocated), `credit_assessment` (point-in-time score). Their columns are the minimum the
-warehouse needs, not a claim about the real system.
-
-## Assumptions (not stated in the task)
-
-- **Status vocabulary.** The spec gives `movement_status.description` with no values. The eight
-  lifecycle stages (`requested, approved, rejected, cancelled, funding, disbursed, repaid,
-  written_off`), their order and which are terminal/active are an assumed vocabulary held in one
-  mapping seed (`seeds/reference/ref_movement_status_map.csv`); unmapped descriptions surface as
-  `unmapped` plus a warn test. Replace the seed with the real descriptions - no SQL changes.
-- A loan is on book from its first `disbursed` movement until a terminal movement; `loan_movement`
-  history is the source of truth and `loan.movement_status_id` is only cross-checked.
-- `loan.created_at` is the application time. `tenor` is in months, as specified.
-- `disbursement.status`, `fund.status`, `insurance.status` and `fund_record.is_signed` are carried
-  to staging but not interpreted, because their values are unknown.
-- `loanhub_loan` is a 0..1 partner-channeling mapping; a loan without one is `DIRECT`; a
-  customer's acquisition channel is the channel of their first loan.
-- `lender_type` = `institutional` for companies, `retail` for individuals, pending a master-data attribute.
-- Payments are allocated to installments oldest-due-first with a proportional principal/interest split.
-- `seeds/reference/` (`ref_loan_type`, `ref_partner`, `ref_movement_status_map`) are placeholder
-  lookups; ids and names are not in the spec, unknown ids resolve to `unknown`.
-- Amounts are IDR; `amount_tolerance` = 1 IDR. `as_of_date` (2026-08-21) is the synthetic horizon
-  and becomes the run date in production; `dim_date` spans 2024-01-01..2028-01-01 and must cover the book.
-- DPD ageing buckets (1-30 / 31-60 / 61-90 / >90) are standard industry practice; the 90-day line
-  (TKB90) is the OJK P2P metric. Mentions of OJK or partner channels are business context, not
-  properties of the provided data.
-- Staging keeps the latest `updated_at` row per natural key as a guard against re-delivered rows;
-  identical re-touches of customer rows are dropped before SCD2 versioning.
-- Customer segmentation uses only customer attributes present in (or derived from) the sources; no
-  invented tiers or thresholds.
+Full spec-vs-treatment table and the assumptions register: [`docs/design_details.md`](docs/design_details.md#1-source-analysis--assumptions).
 
 ---
 
@@ -139,12 +102,12 @@ and large facts go incremental on their date partition with delete+insert over a
 
 ## 5. Decisions & limits (short)
 
-- **Allocate payments at load time**, once, rather than in every query -> consistent DPD everywhere.
-- **Two repayment facts** (schedule + payments) so partial and multi-installment payments keep their detail.
-- **Snapshot active loans only** - size tracks the live book; doubles as OJK daily-position base.
-- **No `fact_loan_movement`**; funnel = milestone columns on `fact_loan`. Named extension.
-- Out of scope: lender yield (no interest ledger), rejection reasons, collections workflow,
-  insurance claims, PII controls (would be BigQuery policy tags).
+- Payments are allocated to installments once, at load time, so DPD is identical in every report.
+- Two repayment facts (schedule + payments) keep partial and multi-installment payments intact.
+- The daily snapshot covers active loans only; it doubles as the base for OJK daily reporting.
+- No `fact_loan_movement`; the funnel is milestone columns on `fact_loan`.
+- Out of scope: lender yield (no interest ledger), rejection reasons, collections, insurance
+  analytics, PII controls. Trade-offs with alternatives: `docs/design_details.md` section 7.
 
 ## Layout
 

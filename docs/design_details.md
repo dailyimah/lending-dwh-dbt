@@ -71,18 +71,35 @@ separated from the given tables in `seeds/proposed/`):
 | `repayment` | `id, loan_id, transfer_id, paid_at, amount, payment_channel` | Actual transfers, **not** pre-allocated to installments - allocation is the warehouse's job (see Section 7) |
 | `credit_assessment` | `id, customer_id, assessed_at, credit_score, grade` | Point-in-time score; drives the Type-2 `credit_score` attribute |
 
-### 1.4 Assumptions register
+### 1.4 Assumptions register (not stated in the task)
 
-- Naive DATETIME values are local Jakarta time (UTC+7, no DST).
-- `loanhub_loan` is a partner **channeling** mapping (ERD label "maps"; `partner_commission_pa` is an annual rate paid to the partner); assumed **0..1 per loan**, giving every loan an `origination_channel` of `direct` or `partner`.
-- `loan_movement` is the authoritative status history.
-- Payments are allocated to installments **oldest due first** (standard lending convention); principal/interest split of each allocation is proportional to the installment's split.
-- `lender_type` is derived from `entity_type` (company -> institutional, individual -> retail) because no source attribute exists; in production this should be a master-data attribute (OJK categorises lenders at onboarding).
-- Customer segmentation uses only customer attributes present in (or derived from) the sources; no loan-size tiers or other invented thresholds.
-- The eight lifecycle status names are an assumed vocabulary (the spec lists none), held in `seeds/reference/ref_movement_status_map.csv`.
-- DPD ageing buckets (current / 1-30 / 31-60 / 61-90 / >90 days) are standard industry practice; the 90-day line is the OJK TKB90 metric.
-- All amounts are IDR.
-- Synthetic data horizon (`as_of_date`) is 2026-08-21; in production this resolves to the run date.
+- **Status vocabulary.** The spec gives `movement_status.description` with no values. The eight
+  lifecycle stages (`requested, approved, rejected, cancelled, funding, disbursed, repaid,
+  written_off`), their order and which are terminal/active are an assumed vocabulary held in one
+  mapping seed (`seeds/reference/ref_movement_status_map.csv`); unmapped descriptions surface as
+  `unmapped` plus a warn test. Replace the seed with the real descriptions - no SQL changes.
+- A loan is on book from its first `disbursed` movement until a terminal movement; `loan_movement`
+  history is the source of truth and `loan.movement_status_id` is only cross-checked.
+- `loan.created_at` is the application time. `tenor` is in months, as specified.
+- `disbursement.status`, `fund.status`, `insurance.status` and `fund_record.is_signed` are carried
+  to staging but not interpreted, because their values are unknown.
+- `loanhub_loan` is a 0..1 partner-channeling mapping; a loan without one is `DIRECT`; a
+  customer's acquisition channel is the channel of their first loan.
+- `lender_type` = `institutional` for companies, `retail` for individuals, pending a master-data attribute.
+- Payments are allocated to installments oldest-due-first with a proportional principal/interest split.
+- `seeds/reference/` (`ref_loan_type`, `ref_partner`, `ref_movement_status_map`) are placeholder
+  lookups; ids and names are not in the spec, unknown ids resolve to `unknown`.
+- Amounts are IDR; `amount_tolerance` = 1 IDR. `as_of_date` (2026-08-21) is the synthetic horizon
+  and becomes the run date in production; `dim_date` spans 2024-01-01..2028-01-01 and must cover the book.
+- DPD ageing buckets (1-30 / 31-60 / 61-90 / >90) are standard industry practice; the 90-day line
+  (TKB90) is the OJK P2P metric. Mentions of OJK or partner channels are business context, not
+  properties of the provided data.
+- Staging keeps the latest `updated_at` row per natural key as a guard against re-delivered rows;
+  identical re-touches of customer rows are dropped before SCD2 versioning.
+- Customer segmentation uses only customer attributes present in (or derived from) the sources; no
+  invented tiers or thresholds.
+
+---
 
 > **Design principle:** no numeric threshold enters the model unless it is present in the source or defined by regulation.
 
