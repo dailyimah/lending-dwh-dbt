@@ -5,25 +5,13 @@ profile: fazz_dwh
 
 model-paths: ["models"]
 seed-paths: ["seeds"]
-snapshot-paths: ["snapshots"]
 macro-paths: ["macros"]
 test-paths: ["tests"]
-target-path: target
-clean-targets: [target, dbt_packages]
 
 vars:
-  # --- Parameters (single place; see README "grounded or parameterized") ---
-  # DPD buckets follow the OJK convention for fintech lending portfolio quality.
-  dpd_bucket_edges: [1, 31, 61, 91]        # current | 1-30 | 31-60 | 61-90 | >90
-  tkb_threshold_days: 90                    # TKB90 line
-  unknown_member_key: "UNKNOWN"             # dim member for orphaned FKs
-  direct_channel_key: "DIRECT"              # dim_partner member for non-partner loans
-  scd_open_end: "9999-12-31"
-  reporting_timezone: "Asia/Jakarta"        # WIB; sources normalized to UTC in staging
-  as_of_date: "2026-08-21"                  # snapshot horizon; synthetic data is generated up to this date.
-                                            # In production: override with current_date via --vars or leave unset logic in macros/as_of.sql
-  payment_allocation_rule: "oldest_due_first"   # documented assumption; principal/interest split is proportional
-  amount_tolerance: 1                       # IDR; rounding tolerance for "fully paid / fully settled" flags
+  reporting_timezone: "Asia/Jakarta"   # naive DATETIME sources are assumed to be Jakarta wall-clock time
+  as_of_date: "2026-08-21"             # reporting horizon; synthetic data runs up to this date (prod: run date)
+  amount_tolerance: 1                  # IDR rounding tolerance for "fully paid" / "fully settled" flags
 
 models:
   fazz_dwh:

@@ -1,28 +1,15 @@
-{#- DPD bucket from var dpd_bucket_edges (OJK convention: current | 1-30 | 31-60 | 61-90 | >90). -#}
+{#- OJK days-past-due buckets for fintech lending portfolio quality. -#}
 {% macro dpd_bucket(dpd_col) -%}
-{%- set edges = var('dpd_bucket_edges') -%}
-case
-  when {{ dpd_col }} is null or {{ dpd_col }} < {{ edges[0] }} then 'current'
-{%- for i in range(edges | length - 1) %}
-  when {{ dpd_col }} < {{ edges[i+1] }} then '{{ edges[i] }}-{{ edges[i+1] - 1 }}'
-{%- endfor %}
-  else '{{ edges[-1] - 1 }}+'
-end
+  case
+    when {{ dpd_col }} is null or {{ dpd_col }} < 1 then 'current'
+    when {{ dpd_col }} <= 30 then '1-30'
+    when {{ dpd_col }} <= 60 then '31-60'
+    when {{ dpd_col }} <= 90 then '61-90'
+    else '90+'
+  end
 {%- endmacro %}
 
-{#- Bucket ordering for sorting in marts. -#}
-{% macro dpd_bucket_order(dpd_col) -%}
-{%- set edges = var('dpd_bucket_edges') -%}
-case
-  when {{ dpd_col }} is null or {{ dpd_col }} < {{ edges[0] }} then 0
-{%- for i in range(edges | length - 1) %}
-  when {{ dpd_col }} < {{ edges[i+1] }} then {{ i + 1 }}
-{%- endfor %}
-  else {{ edges | length }}
-end
-{%- endmacro %}
-
-{#- Horizon date for snapshot/current-state calculations. -#}
+{#- Reporting horizon. -#}
 {% macro as_of_date() -%}
   cast('{{ var("as_of_date") }}' as date)
 {%- endmacro %}
