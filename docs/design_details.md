@@ -45,21 +45,13 @@ table. Minimal shapes, kept in
 - DPD buckets (1-30 / 31-60 / 61-90 / >90) are standard ageing; the 90-day line is the OJK TKB90
   metric.
 
-## Entities and bus matrix
+## Entities
 
 ![conceptual ERD](diagrams/01_conceptual_erd.png)
 
-
-| Process -> fact | dim_customer | dim_date | dim_loan_type | dim_movement_status | dim_partner |
-|---|:-:|:-:|:-:|:-:|:-:|
-| origination and lifecycle -> `fact_loan` | borrower | x | x | x | x |
-| scheduling -> `fact_repayment_schedule` | borrower | due date | x | | x |
-| collection -> `fact_repayment` | borrower | paid date | x | | x |
-| funding -> `fact_funding` | **lender** | x | x | | x |
-| daily position -> `fact_loan_daily_snapshot` | borrower | x | x | x | x |
-
-`dim_customer` is in every row and plays two roles, which is why `individual` and `company` are
-conformed into one dimension.
+`dim_customer` is used by every fact and plays two roles - borrower in the loan, schedule,
+repayment and snapshot facts, lender in `fact_funding` - which is why `individual` and `company`
+are conformed into one dimension.
 
 ## SCD2 worked example
 
