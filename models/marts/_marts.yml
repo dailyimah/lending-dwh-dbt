@@ -1,0 +1,44 @@
+version: 2
+
+models:
+  - name: mart_customer_360
+    description: "One row per current customer: attributes + borrower/lender behaviour metrics. Base for segment and lender-portfolio analysis."
+    columns:
+      - name: customer_id
+        tests: [unique, not_null]
+      - name: on_time_repayment_rate
+        tests:
+          - dbt_utils_free_range:
+              min_value: 0
+              max_value: 1
+  - name: mart_credit_score_by_segment
+    description: "Average credit score per customer segment (long format), with portfolio context."
+    tests:
+      - unique_combination:
+          combination_of_columns: [segment_type, segment_value]
+    columns:
+      - name: segment_type
+        tests:
+          - accepted_values: {values: ['entity_type','customer_role','origination_channel','lender_type','province','credit_grade','repeat_borrower','entity_x_channel']}
+  - name: mart_delinquency
+    description: "Portfolio quality by day x loan type x partner x grade: DPD buckets, delinquency rate, PAR30, NPL90, TKB90."
+    tests:
+      - unique_combination:
+          combination_of_columns: [snapshot_date, loan_type_id, partner_id, grade]
+    columns:
+      - name: tkb90
+        tests:
+          - dbt_utils_free_range:
+              min_value: 0
+              max_value: 1
+  - name: mart_loan_performance
+    description: "Loan performance by disbursement cohort x loan type x partner x grade x repayment mode."
+    tests:
+      - unique_combination:
+          combination_of_columns: [disbursement_cohort, loan_type_id, partner_id, grade, repayment_mode]
+    columns:
+      - name: collection_rate
+        tests:
+          - dbt_utils_free_range:
+              min_value: 0
+              max_value: 1.05
