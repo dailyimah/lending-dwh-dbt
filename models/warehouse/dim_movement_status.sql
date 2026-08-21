@@ -1,8 +1,5 @@
 {{ config(materialized='table') }}
-/*
-  dim_movement_status - loan lifecycle statuses. Natural key: movement_id.
-  Adds lifecycle ordering and terminal/active flags used by fact_loan and the snapshot.
-*/
+/* dim_movement_status - loan lifecycle statuses. Natural key: movement_id. */
 select
     movement_id,
     status_name,
@@ -16,9 +13,7 @@ select
         when 'repaid'      then 50
         when 'written_off' then 55
         else 99 end                                                   as lifecycle_order,
-    status_name in ('rejected', 'cancelled', 'repaid', 'written_off') as is_terminal,
-    status_name = 'disbursed'                                         as is_active_book,
-    status_name in ('repaid', 'written_off')                          as is_closed_after_disbursement
+    status_name in ('rejected', 'cancelled', 'repaid', 'written_off') as is_terminal
 from {{ ref('stg_movement_status') }}
 union all
-select '{{ var("unknown_member_key") }}', 'unknown', 99, false, false, false
+select 'UNKNOWN', 'unknown', 99, false

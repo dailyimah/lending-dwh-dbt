@@ -17,7 +17,7 @@ select
     cast(nominal_loan    as {{ dbt.type_numeric() }})  as nominal_loan,
     upper(grade)                                as grade,
     lower(repayment_mode)                       as repayment_mode,
-    cast(movement_status_id as {{ dbt.type_string() }}) as current_movement_id,   -- type fix (INTEGER -> STRING)
+    cast(movement_status_id as {{ dbt.type_string() }}) as source_movement_id,    -- type fix (INTEGER -> STRING)
     cast(created_at as timestamp)               as requested_at,
     cast(updated_at as timestamp)               as source_updated_at
 from src

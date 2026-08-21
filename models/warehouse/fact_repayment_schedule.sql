@@ -5,8 +5,8 @@
 ) }}
 /*
   fact_repayment_schedule - TRANSACTIONAL (immutable). Grain: one expected installment of one loan.
-  Lump-sum loans have exactly one row. Allocated-payment roll-ups are attached for convenience;
-  the payment-level detail lives in fact_repayment.
+  Lump-sum loans have exactly one row. Allocated payments are rolled up per installment;
+  payment-level detail lives in fact_repayment.
 */
 with s as (
     select * from {{ ref('stg_repayment_schedule') }}
@@ -16,13 +16,10 @@ fl as (
     from {{ ref('fact_loan') }}
 ),
 alloc as (
-    select
-        schedule_id,
-        sum(allocated_amount)    as paid_amount,
-        sum(allocated_principal) as paid_principal,
-        sum(allocated_interest)  as paid_interest,
-        min(paid_date)           as first_paid_date,
-        count(*)                 as allocation_count
+    select schedule_id,
+           sum(allocated_amount)    as paid_amount,
+           sum(allocated_principal) as paid_principal,
+           sum(allocated_interest)  as paid_interest
     from {{ ref('int_repayment_allocation') }}
     where schedule_id is not null
     group by schedule_id
@@ -51,7 +48,6 @@ select
     fl.grade,
     fl.disbursement_cohort,
     s.due_date,
-    cast(extract(year from s.due_date) * 100 + extract(month from s.due_date) as integer) as due_year_month,
     s.due_principal,
     s.due_interest,
     s.due_amount,
@@ -59,14 +55,9 @@ select
     coalesce(a.paid_principal, 0)                               as paid_principal,
     coalesce(a.paid_interest, 0)                                as paid_interest,
     greatest(s.due_amount - coalesce(a.paid_amount, 0), 0)      as remaining_amount,
-    coalesce(a.allocation_count, 0)                             as allocation_count,
-    a.first_paid_date,
     fp.fully_paid_date,
     fp.fully_paid_date is not null                              as is_fully_paid,
-    coalesce(a.allocation_count, 0) > 1                         as is_paid_in_parts,
-    {{ dbt.datediff('s.due_date', 'fp.fully_paid_date', 'day') }} as days_late_to_full_payment,
-    case when fp.fully_paid_date is null and s.due_date < {{ as_of_date() }}
-         then {{ dbt.datediff('s.due_date', as_of_date(), 'day') }} else 0 end as days_past_due_as_of
+    {{ dbt.datediff('s.due_date', 'fp.fully_paid_date', 'day') }} as days_late_to_full_payment
 from s
 left join fl on fl.loan_id = s.loan_id
 left join alloc a on a.schedule_id = s.schedule_id

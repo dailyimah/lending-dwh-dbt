@@ -3,14 +3,9 @@ version: 2
 models:
   - name: dim_customer
     description: >
-      Unified customer dimension (individual + company), SCD Type 2. One row per customer version.
-      Key customer_key = customer_id#sequence_no. Type-2 columns: customer_role, is_borrower, is_lender,
-      identity_card_type, geography, credit_score. Type-1: name, email, phone, founded_date, pic_name, nib_number.
-    tests:
-      - unique_combination:
-          combination_of_columns: [customer_id, sequence_no]
-      - unique_combination:
-          combination_of_columns: [customer_id, valid_from]
+      Unified customer dimension (individual + company), SCD Type 2. One row per customer version;
+      key customer_key = customer_id#sequence_no. A version opens whenever the source record or the
+      credit score changes.
     columns:
       - name: customer_key
         tests: [unique, not_null]

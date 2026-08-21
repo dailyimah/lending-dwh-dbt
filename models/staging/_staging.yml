@@ -11,7 +11,7 @@ models:
       - name: repayment_mode
         tests:
           - accepted_values: {values: ['installment', 'lump_sum']}
-      - name: current_movement_id
+      - name: source_movement_id
         tests:
           - relationships: {to: ref('stg_movement_status'), field: movement_id}
   - name: stg_loan_movement
@@ -68,14 +68,14 @@ models:
   - name: stg_individual
     description: "All customer versions kept (SCD2 input); only no-change re-touches dropped."
     tests:
-      - unique_combination:
+      - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [customer_id, source_updated_at]
     columns:
       - name: customer_id
         tests: [not_null]
   - name: stg_company
     tests:
-      - unique_combination:
+      - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [customer_id, source_updated_at]
     columns:
       - name: customer_id
@@ -83,7 +83,7 @@ models:
   - name: stg_repayment_schedule
     description: "PROPOSED source."
     tests:
-      - unique_combination:
+      - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [loan_id, installment_no]
     columns:
       - name: schedule_id

@@ -1,10 +1,7 @@
 {{ config(
-    materialized='incremental',
-    incremental_strategy='delete+insert',
-    unique_key=['snapshot_date', 'loan_id'],
+    materialized='table',
     partition_by=bq_partition('snapshot_date', 'day'),
-    cluster_by=['loan_id'],
-    on_schema_change='sync_all_columns'
+    cluster_by=['loan_id']
 ) }}
 /*
   fact_loan_daily_snapshot - PERIODIC SNAPSHOT. Grain: one ACTIVE loan per calendar day,
@@ -12,8 +9,8 @@
   status). Outstanding principal, overdue amount, DPD and OJK bucket as of each day.
   DPD = days since the due date of the oldest installment not fully covered by payments
   received on or before that day (payments allocated oldest-due-first).
-  Incremental by snapshot_date: each run recomputes only days after the last loaded day
-  (delete+insert on the partition keys keeps reruns idempotent).
+  Rebuilt in full here; in production: incremental by snapshot_date over a trailing window
+  (delete+insert) so late payments re-state recent days.
 */
 with loans as (
     select loan_id, borrower_customer_key, loan_type_id, partner_id, grade, repayment_mode,
@@ -24,9 +21,6 @@ with loans as (
 days as (
     select date_day from {{ ref('dim_date') }}
     where date_day <= {{ as_of_date() }}
-    {% if is_incremental() %}
-      and date_day > (select coalesce(max(snapshot_date), cast('1900-01-01' as date)) from {{ this }})
-    {% endif %}
 ),
 spine as (
     select d.date_day as snapshot_date, l.*
@@ -94,8 +88,7 @@ calc as (
 select
     *,
     {{ dpd_bucket('days_past_due') }}                                       as dpd_bucket,
-    {{ dpd_bucket_order('days_past_due') }}                                 as dpd_bucket_order,
     days_past_due > 0                                                       as is_delinquent,
-    days_past_due > {{ var('tkb_threshold_days') }}                         as is_npl_90,    -- beyond the TKB90 line
+    days_past_due > 90                                                      as is_npl_90,    -- beyond the TKB90 line
     status_name = 'disbursed'                                               as is_active
 from calc
