@@ -34,7 +34,7 @@ Ten table specifications (column / type / description) and one ERD: `loan`, `loa
 `movement_status`, `disbursement`, `loanhub_loan`, `fund`, `fund_record`, `insurance`,
 `individual`, `company`. **No data rows were provided for Task 1**, so the specifications are
 treated as the source contract and the SQL is design-verified against synthetic data generated
-to those specifications (`seeds/generate_seeds.py`, fixed random seed).
+to those specifications ([`seeds/generate_seeds.py`](https://github.com/dailyimah/lending-dwh-dbt/blob/main/seeds/generate_seeds.py), fixed random seed).
 
 The business is a two-sided P2P lending marketplace: individuals and companies can be borrowers
 *and/or* lenders; several lenders fund one loan fractionally (`fund.fund_ratio`); loans move
@@ -63,7 +63,7 @@ staging layer rather than silently.
 
 The task lists **Repayments** as a core entity and requires a **credit score** mart, but no
 source table provides either. The following minimal source shapes are *proposed* (and clearly
-separated from the given tables in `seeds/proposed/`):
+separated from the given tables in [`seeds/proposed/`](https://github.com/dailyimah/lending-dwh-dbt/tree/main/seeds/proposed)):
 
 | Proposed table | Columns | Why |
 |---|---|---|
@@ -76,7 +76,7 @@ separated from the given tables in `seeds/proposed/`):
 - **Status vocabulary.** The spec gives `movement_status.description` with no values. The eight
   lifecycle stages (`requested, approved, rejected, cancelled, funding, disbursed, repaid,
   written_off`), their order and which are terminal/active are an assumed vocabulary held in one
-  mapping seed (`seeds/reference/ref_movement_status_map.csv`); unmapped descriptions surface as
+  mapping seed ([`seeds/reference/ref_movement_status_map.csv`](https://github.com/dailyimah/lending-dwh-dbt/blob/main/seeds/reference/ref_movement_status_map.csv)); unmapped descriptions surface as
   `unmapped` plus a warn test. Replace the seed with the real descriptions - no SQL changes.
 - A loan is on book from its first `disbursed` movement until a terminal movement; `loan_movement`
   history is the source of truth and `loan.movement_status_id` is only cross-checked.
@@ -87,7 +87,7 @@ separated from the given tables in `seeds/proposed/`):
   customer's acquisition channel is the channel of their first loan.
 - `lender_type` = `institutional` for companies, `retail` for individuals, pending a master-data attribute.
 - Payments are allocated to installments oldest-due-first with a proportional principal/interest split.
-- `seeds/reference/` (`ref_loan_type`, `ref_partner`, `ref_movement_status_map`) are placeholder
+- [`seeds/reference/`](https://github.com/dailyimah/lending-dwh-dbt/tree/main/seeds/reference) (`ref_loan_type`, `ref_partner`, `ref_movement_status_map`) are placeholder
   lookups; ids and names are not in the spec, unknown ids resolve to `unknown`.
 - Amounts are IDR; `amount_tolerance` = 1 IDR. `as_of_date` (2026-08-21) is the synthetic horizon
   and becomes the run date in production; `dim_date` spans 2024-01-01..2028-01-01 and must cover the book.
@@ -309,10 +309,10 @@ flowchart LR
 
 | Layer | Materialization | Responsibility |
 |---|---|---|
-| `models/staging/` | view | One model per source table. Type casting (incl. the INTEGER->STRING FK fix), timezone normalization, `founded` parsing, consistent naming, dropping no-change duplicate rows **while keeping history** (SCD2 input) |
-| `models/intermediate/` | ephemeral | `int_customer_versions` (unified change stream with point-in-time credit score), `int_loan_milestones` (first time each status was reached), `int_repayment_allocation` (oldest-due-first allocation) |
-| `models/warehouse/` | table | Dimensions then facts. Facts resolve `customer_key` as of event time |
-| `models/marts/` | table | Thin aggregations over dims + facts only |
+| [`models/staging/`](https://github.com/dailyimah/lending-dwh-dbt/tree/main/models/staging) | view | One model per source table. Type casting (incl. the INTEGER->STRING FK fix), timezone normalization, `founded` parsing, consistent naming, dropping no-change duplicate rows **while keeping history** (SCD2 input) |
+| [`models/intermediate/`](https://github.com/dailyimah/lending-dwh-dbt/tree/main/models/intermediate) | ephemeral | `int_customer_versions` (unified change stream with point-in-time credit score), `int_loan_milestones` (first time each status was reached), `int_repayment_allocation` (oldest-due-first allocation) |
+| [`models/warehouse/`](https://github.com/dailyimah/lending-dwh-dbt/tree/main/models/warehouse) | table | Dimensions then facts. Facts resolve `customer_key` as of event time |
+| [`models/marts/`](https://github.com/dailyimah/lending-dwh-dbt/tree/main/models/marts) | table | Thin aggregations over dims + facts only |
 
 Load order is the dbt DAG (`dbt build`). Three parameters live in `dbt_project.yml -> vars`:
 source UTC offset, `as_of_date`, amount tolerance.
@@ -414,4 +414,4 @@ daily series (already derivable from `mart_delinquency`).
 
 ---
 
-Repository layout and run instructions: see `README.md`.
+Repository layout and run instructions: see [`README.md`](https://github.com/dailyimah/lending-dwh-dbt/blob/main/README.md).

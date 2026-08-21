@@ -23,14 +23,14 @@ Full design rationale: [`docs/design_details.md`](docs/design_details.md). Linea
 ## 1. Source analysis (short)
 
 Ten table specs and an ERD were provided; **no data rows**. The specs are the source contract and
-are exercised with synthetic data (`seeds/generate_seeds.py`, with planted defects). Staging fixes
+are exercised with synthetic data ([`seeds/generate_seeds.py`](https://github.com/dailyimah/lending-dwh-dbt/blob/main/seeds/generate_seeds.py), with planted defects). Staging fixes
 what the specs imply: INTEGER/STRING FK mismatch, DATETIME columns without a zone, `founded` as a
 free string, redundant status columns, orphaned keys.
 
 "Repayments" and a credit score are required by the task but have no source table, so three
-minimal entities are *proposed* and kept separate in `seeds/proposed/`: `repayment_schedule`,
+minimal entities are *proposed* and kept separate in [`seeds/proposed/`](https://github.com/dailyimah/lending-dwh-dbt/tree/main/seeds/proposed): `repayment_schedule`,
 `repayment`, `credit_assessment`. The status vocabulary is not given either; it lives in one
-mapping seed (`seeds/reference/ref_movement_status_map.csv`).
+mapping seed ([`seeds/reference/ref_movement_status_map.csv`](https://github.com/dailyimah/lending-dwh-dbt/blob/main/seeds/reference/ref_movement_status_map.csv)).
 
 Full spec-vs-treatment table and the assumptions register: [`docs/design_details.md`](docs/design_details.md#1-source-analysis--assumptions).
 
@@ -107,7 +107,7 @@ and large facts go incremental on their date partition with delete+insert over a
 - The daily snapshot covers active loans only; it doubles as the base for OJK daily reporting.
 - No `fact_loan_movement`; the funnel is milestone columns on `fact_loan`.
 - Out of scope: lender yield (no interest ledger), rejection reasons, collections, insurance
-  analytics, PII controls. Trade-offs with alternatives: `docs/design_details.md` section 7.
+  analytics, PII controls. Trade-offs with alternatives: [`docs/design_details.md`](https://github.com/dailyimah/lending-dwh-dbt/blob/main/docs/design_details.md) section 7.
 
 ## Layout
 
