@@ -87,9 +87,3 @@ A single transfer covering two installments yields two rows the same way; `trans
 | snapshot of active loans only | every loan every day | size tracks the live book |
 | milestone columns on `fact_loan` | `fact_loan_movement` | funnel questions need first-reached timestamps only |
 | metrics in marts | metrics in `dim_customer` | otherwise every repayment opens a customer version |
-
-## Out of scope
-
-Lender yield (no interest data), rejection reasons, collections workflow, insurance beyond a flag,
-PII controls (BigQuery policy tags in production). BigQuery partitioning is declared via
-`bq_partition` but has not been executed on BigQuery.
