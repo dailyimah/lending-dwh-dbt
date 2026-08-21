@@ -26,7 +26,7 @@ snap as (
     select
         l.borrower_customer_id as customer_id,
         max(s.days_past_due)                                                 as max_dpd_ever,
-        max(case when s.snapshot_date = {{ as_of_date() }} and s.is_active then s.days_past_due else 0 end) as current_dpd,
+        max(case when s.snapshot_date = date '{{ var("as_of_date") }}' and s.is_active then s.days_past_due else 0 end) as current_dpd,
         max(case when s.is_npl_90 then 1 else 0 end) = 1                     as ever_npl_90
     from {{ ref('fact_loan_daily_snapshot') }} s
     join {{ ref('fact_loan') }} l on l.loan_id = s.loan_id
@@ -39,7 +39,7 @@ sched as (
         sum(case when s.is_fully_paid and s.fully_paid_date <= s.due_date then 1 else 0 end) as installments_paid_on_time_count
     from {{ ref('fact_repayment_schedule') }} s
     join {{ ref('fact_loan') }} l on l.loan_id = s.loan_id
-    where s.due_date <= {{ as_of_date() }}
+    where s.due_date <= date '{{ var("as_of_date") }}'
     group by l.borrower_customer_id
 ),
 funding as (
@@ -68,7 +68,12 @@ select
     coalesce(l.total_paid_amount, 0)             as total_paid_amount,
     coalesce(sn.max_dpd_ever, 0)                 as max_dpd_ever,
     coalesce(sn.current_dpd, 0)                  as current_dpd,
-    {{ dpd_bucket('coalesce(sn.current_dpd, 0)') }} as current_dpd_bucket,
+    case
+        when coalesce(sn.current_dpd, 0) < 1  then 'current'
+        when coalesce(sn.current_dpd, 0) <= 30 then '1-30'
+        when coalesce(sn.current_dpd, 0) <= 60 then '31-60'
+        when coalesce(sn.current_dpd, 0) <= 90 then '61-90'
+        else '90+' end as current_dpd_bucket,
     coalesce(sn.ever_npl_90, false)              as ever_npl_90,
     coalesce(sc.installments_due_count, 0)       as installments_due_count,
     coalesce(sc.installments_paid_on_time_count, 0) as installments_paid_on_time_count,
@@ -80,7 +85,7 @@ select
     coalesce(f.total_committed_amount, 0)        as total_committed_amount,
     coalesce(f.current_exposure_amount, 0)       as current_exposure_amount,
 
-    {{ as_of_date() }}                           as as_of_date
+    date '{{ var("as_of_date") }}'                           as as_of_date
 from cur c
 left join loans   l  on l.customer_id  = c.customer_id
 left join snap    sn on sn.customer_id = c.customer_id

@@ -19,8 +19,8 @@ vintage as (
 ),
 due as (
     select loan_id,
-           sum(case when due_date <= {{ as_of_date() }} then due_amount else 0 end) as due_amount_to_date,
-           sum(case when due_date <= {{ as_of_date() }} then paid_amount else 0 end) as paid_on_due_to_date
+           sum(case when due_date <= date '{{ var("as_of_date") }}' then due_amount else 0 end) as due_amount_to_date,
+           sum(case when due_date <= date '{{ var("as_of_date") }}' then paid_amount else 0 end) as paid_on_due_to_date
     from {{ ref('fact_repayment_schedule') }}
     group by loan_id
 )
@@ -56,7 +56,7 @@ select
     avg(l.approval_haircut_pct)                                         as avg_approval_haircut_pct,
     avg(l.lender_count)                                                 as avg_lender_count,
     avg(case when l.has_insurance then 1.0 else 0.0 end)                as insured_share,
-    {{ as_of_date() }}                                                  as as_of_date
+    date '{{ var("as_of_date") }}'                                                  as as_of_date
 from l
 left join vintage v on v.loan_id = l.loan_id
 left join due d     on d.loan_id = l.loan_id

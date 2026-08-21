@@ -50,7 +50,7 @@ staging layer rather than silently.
 | # | Observation | Handling |
 |---|---|---|
 | 1 | `loan.movement_status_id` is **INTEGER**, but `movement_status.movement_id` is **STRING** - the FK cannot join as specified | Cast to STRING in `stg_loan`; relationship test enforces the join |
-| 2 | Most tables use **TIMESTAMP**; `individual`, `company`, `insurance` use **DATETIME** (no timezone) | Converted to UTC assuming `Asia/Jakarta` (`reporting_timezone` var) - documented assumption, one macro (`local_to_utc`) |
+| 2 | Most tables use **TIMESTAMP**; `individual`, `company`, `insurance` use **DATETIME** (no timezone) | Converted to UTC with a fixed UTC+7 offset (Jakarta, no DST; `source_utc_offset_hours` var) |
 | 3 | `loan.movement_status_id` duplicates what `loan_movement` history already says; the two can disagree | History is the source of truth; current status is derived from the latest movement; disagreement is surfaced by `fact_loan.has_status_mismatch` and a `warn` test |
 | 4 | `company.founded` is **STRING** | Parsed from three observed formats (`YYYY`, `YYYY-MM-DD`, `MM/YYYY`) to DATE; NULL if unparseable |
 | 5 | `fund.fund_ratio` should sum to 1.0 per loan; nothing enforces it | Singular test `assert_fund_ratio_sums_to_one` (warn) |
@@ -73,7 +73,7 @@ separated from the given tables in `seeds/proposed/`):
 
 ### 1.4 Assumptions register
 
-- Naive DATETIME values are local `Asia/Jakarta` time.
+- Naive DATETIME values are local Jakarta time (UTC+7, no DST).
 - `loanhub_loan` is a partner **channeling** mapping (ERD label "maps"; `partner_commission_pa` is an annual rate paid to the partner); assumed **0..1 per loan**, giving every loan an `origination_channel` of `direct` or `partner`.
 - `loan_movement` is the authoritative status history.
 - Payments are allocated to installments **oldest due first** (standard lending convention); principal/interest split of each allocation is proportional to the installment's split.
@@ -300,7 +300,7 @@ flowchart LR
 | `models/marts/` | table | Thin aggregations over dims + facts only |
 
 Load order is the dbt DAG (`dbt build`). Three parameters live in `dbt_project.yml -> vars`:
-reporting timezone, `as_of_date`, amount tolerance.
+source UTC offset, `as_of_date`, amount tolerance.
 
 **Production notes.** Seeds would be replaced by `sources:` on raw BigQuery datasets. The
 customer dimension is derived from a history-carrying change stream here; with current-state-only

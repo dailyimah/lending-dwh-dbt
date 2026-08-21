@@ -44,6 +44,6 @@ select
     case when outstanding_principal > 0 then 1 - cast(outstanding_npl_90 as {{ dbt.type_float() }}) / cast(outstanding_principal as {{ dbt.type_float() }}) end  as tkb90,
     d.year_month_no,
     d.is_month_end,
-    a.snapshot_date = {{ as_of_date() }}                                      as is_latest
+    a.snapshot_date = date '{{ var("as_of_date") }}'                                      as is_latest
 from agg a
 join {{ ref('dim_date') }} d on d.date_day = a.snapshot_date

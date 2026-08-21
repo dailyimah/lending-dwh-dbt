@@ -1,7 +1,7 @@
 {{ config(materialized='view') }}
 /*
   stg_individual - individual customers, ALL versions kept (SCD2 input).
-  - naive DATETIME -> UTC (assumed reporting_timezone)
+  - naive DATETIME -> UTC (fixed UTC+7 offset, var source_utc_offset_hours)
   - drops "no-change" re-touches: rows identical in content that differ only by updated_at
   - shaped to the unified customer contract (company-only columns NULL)
 */
@@ -19,8 +19,8 @@ with typed as (
         cast(null as date)                  as founded_date,
         cast(null as {{ dbt.type_string() }}) as pic_name,
         cast(null as {{ dbt.type_string() }}) as nib_number,
-        {{ local_to_utc('created_at') }}    as source_created_at,
-        {{ local_to_utc('updated_at') }}    as source_updated_at
+        {{ dbt.dateadd('hour', -1 * var('source_utc_offset_hours'), 'cast(created_at as timestamp)') }}    as source_created_at,
+        {{ dbt.dateadd('hour', -1 * var('source_utc_offset_hours'), 'cast(updated_at as timestamp)') }}    as source_updated_at
     from {{ ref('individual') }}
 ),
 dedup as (

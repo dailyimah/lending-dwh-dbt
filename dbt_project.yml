@@ -9,7 +9,7 @@ macro-paths: ["macros"]
 test-paths: ["tests"]
 
 vars:
-  reporting_timezone: "Asia/Jakarta"   # naive DATETIME sources are assumed to be Jakarta wall-clock time
+  source_utc_offset_hours: 7           # naive DATETIME sources are Jakarta wall-clock (UTC+7, no DST)
   as_of_date: "2026-08-21"             # reporting horizon; synthetic data runs up to this date (prod: run date)
   amount_tolerance: 1                  # IDR rounding tolerance for "fully paid" / "fully settled" flags
 

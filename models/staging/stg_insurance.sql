@@ -1,7 +1,7 @@
 {{ config(materialized='view') }}
 /*
   stg_insurance - one row per loan (latest). Source uses naive DATETIME (no tz):
-  converted to UTC assuming reporting_timezone (see macros/dialect.sql).
+  converted to UTC with a fixed UTC+7 offset (var source_utc_offset_hours).
 */
 with src as (
     select *,
@@ -14,7 +14,7 @@ select
     cast(premium as {{ dbt.type_numeric() }}) as premium_amount,
     vendor                              as insurance_vendor,
     lower(status)                       as insurance_status,
-    {{ local_to_utc('created_at') }}    as insured_at,
-    {{ local_to_utc('updated_at') }}    as source_updated_at
+    {{ dbt.dateadd('hour', -1 * var('source_utc_offset_hours'), 'cast(created_at as timestamp)') }}    as insured_at,
+    {{ dbt.dateadd('hour', -1 * var('source_utc_offset_hours'), 'cast(updated_at as timestamp)') }}    as source_updated_at
 from src
 where rn = 1

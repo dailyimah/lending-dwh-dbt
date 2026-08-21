@@ -20,14 +20,14 @@ with loans as (
 ),
 days as (
     select date_day from {{ ref('dim_date') }}
-    where date_day <= {{ as_of_date() }}
+    where date_day <= date '{{ var("as_of_date") }}'
 ),
 spine as (
     select d.date_day as snapshot_date, l.*
     from loans l
     join days d
       on d.date_day >= l.disbursed_date
-     and d.date_day <= least(coalesce(l.closed_date, {{ as_of_date() }}), {{ as_of_date() }})
+     and d.date_day <= least(coalesce(l.closed_date, date '{{ var("as_of_date") }}'), date '{{ var("as_of_date") }}')
 ),
 sched as (
     select loan_id, installment_no, due_date, due_amount, due_principal,
@@ -87,7 +87,12 @@ calc as (
 )
 select
     *,
-    {{ dpd_bucket('days_past_due') }}                                       as dpd_bucket,
+    case
+        when days_past_due < 1  then 'current'
+        when days_past_due <= 30 then '1-30'
+        when days_past_due <= 60 then '31-60'
+        when days_past_due <= 90 then '61-90'
+        else '90+' end                                       as dpd_bucket,
     days_past_due > 0                                                       as is_delinquent,
     days_past_due > 90                                                      as is_npl_90,    -- beyond the TKB90 line
     status_name = 'disbursed'                                               as is_active

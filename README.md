@@ -27,7 +27,7 @@ Issues found in the specs, each handled explicitly in staging:
 | Issue | Handling |
 |---|---|
 | `loan.movement_status_id` is INTEGER, `movement_status.movement_id` is STRING | cast in `stg_loan`; relationship test |
-| `individual`, `company`, `insurance` use naive DATETIME, others TIMESTAMP | -> UTC assuming `Asia/Jakarta` (`reporting_timezone` var) |
+| `individual`, `company`, `insurance` use naive DATETIME, others TIMESTAMP | -> UTC with a fixed UTC+7 offset (Jakarta, no DST; `source_utc_offset_hours` var) |
 | `loan.movement_status_id` duplicates `loan_movement` history and can disagree | history is truth; disagreement surfaced by `fact_loan.has_status_mismatch` (warn) |
 | `company.founded` is STRING in mixed formats | parsed to DATE, NULL if unparseable |
 | `fund.fund_ratio` should sum to 1 per loan; nothing enforces it | singular test (warn) |
@@ -127,9 +127,9 @@ and large facts go incremental on their date partition with delete+insert over a
 ```
 pyproject.toml - uv.lock              dependencies (dbt-core, dbt-duckdb; optional dbt-bigquery)
 packages.yml                          dbt_utils
-dbt_project.yml - profiles.yml        3 vars (timezone, as_of_date, tolerance) - duckdb/bigquery targets
+dbt_project.yml - profiles.yml        3 vars (utc offset, as_of_date, tolerance) - duckdb/bigquery targets
 seeds/{given,proposed,reference}/     sources; generate_seeds.py
-macros/                               BigQuery/DuckDB dispatch, DPD buckets, partitioning
+macros/                               bq_partition only (BigQuery partition config, none on DuckDB)
 models/{staging,intermediate,warehouse,marts}/
 tests/                                singular DQ tests
 docs/{diagrams,design_details.md}
