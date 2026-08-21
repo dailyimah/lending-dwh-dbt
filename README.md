@@ -14,7 +14,7 @@ DBT_PROFILES_DIR=. uv run dbt build       # seeds -> staging -> dims -> facts ->
 ```
 
 **5 facts - 5 conformed dimensions (customer = SCD Type 2) - 4 marts. All tests pass except two
-intentional `warn`s that surface planted source defects.**
+intentional warnings that surface planted source defects.**
 Full design rationale: [`docs/design_details.md`](docs/design_details.md). Lineage and column docs:
 `uv run dbt docs generate && uv run dbt docs serve`.
 
