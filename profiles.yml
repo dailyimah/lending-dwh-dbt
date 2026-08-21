@@ -1,0 +1,16 @@
+# Local development / review target: DuckDB (no credentials needed).
+# Production target: BigQuery (documented; not runnable here without credentials).
+fazz_dwh:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: fazz_dwh.duckdb
+      threads: 4
+    prod:
+      type: bigquery
+      method: oauth
+      project: fazz-data-platform        # placeholder
+      dataset: fazz_dwh
+      location: asia-southeast2          # Jakarta
+      threads: 8

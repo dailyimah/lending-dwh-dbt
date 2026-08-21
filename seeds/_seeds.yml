@@ -1,0 +1,179 @@
+version: 2
+
+# Seeds stand in for the SOURCE SYSTEMS. In production these would be declared as
+# `sources:` pointing at raw BigQuery datasets; seeds are used here so the project
+# is runnable end-to-end without credentials. Column types mirror the PDF specs
+# exactly - including the deliberate inconsistencies (see README).
+
+seeds:
+  # ------------------------------------------------------------ given (PDF)
+  - name: loan
+    description: "General information related to loan; 1 record per loan. (PDF spec)"
+    config:
+      column_types:
+        loan_id: varchar
+        borrower_account_id: varchar
+        loan_type_id: varchar
+        tenor: integer
+        nominal_request: double
+        nominal_loan: double
+        grade: varchar
+        repayment_mode: varchar
+        movement_status_id: integer          # INTEGER per spec (mismatch vs movement_status.movement_id STRING)
+        created_at: timestamp
+        updated_at: timestamp
+
+  - name: loan_movement
+    description: "Loan status history; many-to-one to loan. (PDF spec)"
+    config:
+      column_types:
+        id: varchar
+        loan_id: varchar
+        movement_id: varchar
+        created_at: timestamp
+        updated_at: timestamp
+
+  - name: movement_status
+    description: "Lookup of loan movement statuses. (PDF spec)"
+    config:
+      column_types:
+        movement_id: varchar                 # STRING per spec
+        description: varchar
+        created_at: timestamp
+        updated_at: timestamp
+
+  - name: disbursement
+    description: "Loan disbursement and its configuration. (PDF spec)"
+    config:
+      column_types:
+        id: varchar
+        loan_id: varchar
+        bank_id: varchar
+        disbursement_method: varchar
+        status: varchar
+        approver_id: varchar
+        escrow_id: varchar
+        created_at: timestamp
+        updated_at: timestamp
+
+  - name: loanhub_loan
+    description: "Integration to third-party partner loans (channeling mapping). (PDF spec)"
+    config:
+      column_types:
+        id: varchar
+        loan_id: varchar
+        loan_reference_id: varchar
+        partner_id: varchar
+        partner_commission_pa: double
+        created_at: timestamp
+        updated_at: timestamp
+
+  - name: fund
+    description: "Lender funds to a loan (P2P); many-to-one to loan. (PDF spec)"
+    config:
+      column_types:
+        id: varchar
+        loan_id: varchar
+        lender_account_id: varchar
+        nominal: double
+        fund_ratio: double
+        status: varchar
+        created_at: timestamp
+        updated_at: timestamp
+
+  - name: fund_record
+    description: "Lender fund settlement records; many-to-one to fund. (PDF spec)"
+    config:
+      column_types:
+        id: varchar
+        funding_id: varchar
+        amount: double
+        is_settled: boolean
+        is_signed: boolean
+        created_at: timestamp
+        updated_at: timestamp
+
+  - name: insurance
+    description: "Loan insurance configuration; one-to-one to loan. DATETIME columns (naive). (PDF spec)"
+    config:
+      column_types:
+        id: varchar
+        loan_id: varchar
+        premium: double
+        vendor: varchar
+        status: varchar
+        created_at: timestamp               # DATETIME per spec - naive local time, normalized in staging
+        updated_at: timestamp
+
+  - name: individual
+    description: "Individual customer master. DATETIME columns (naive). (PDF spec)"
+    config:
+      column_types:
+        id: varchar
+        name: varchar
+        email: varchar
+        phone_number: varchar
+        country_id: varchar
+        province_id: varchar
+        city_id: varchar
+        district_id: varchar
+        is_borrower: boolean
+        is_lender: boolean
+        identity_card_type: varchar
+        created_at: timestamp               # DATETIME per spec
+        updated_at: timestamp
+
+  - name: company
+    description: "Company customer master. DATETIME columns (naive); founded is STRING. (PDF spec)"
+    config:
+      column_types:
+        id: varchar
+        name: varchar
+        email: varchar
+        phone_number: varchar
+        country_id: varchar
+        province_id: varchar
+        city_id: varchar
+        district_id: varchar
+        is_borrower: boolean
+        is_lender: boolean
+        identity_card_type: varchar
+        founded: varchar                     # STRING per spec, mixed formats
+        pic_name: varchar
+        nib_number: varchar
+        created_at: timestamp               # DATETIME per spec
+        updated_at: timestamp
+
+  # ------------------------------------------------------------ proposed (NOT in PDF)
+  - name: repayment_schedule
+    description: "PROPOSED - not in provided ERD. Expected installments per loan; lump sum = 1 row."
+    config:
+      column_types:
+        id: varchar
+        loan_id: varchar
+        installment_no: integer
+        due_date: date
+        due_principal: double
+        due_interest: double
+        due_amount: double
+
+  - name: repayment
+    description: "PROPOSED - not in provided ERD. Actual payment transfers (raw, not allocated to installments)."
+    config:
+      column_types:
+        id: varchar
+        loan_id: varchar
+        transfer_id: varchar
+        paid_at: timestamp
+        amount: double
+        payment_channel: varchar
+
+  - name: credit_assessment
+    description: "PROPOSED - not in provided ERD. Point-in-time credit score per customer."
+    config:
+      column_types:
+        id: varchar
+        customer_id: varchar
+        assessed_at: timestamp
+        credit_score: integer
+        grade: varchar
