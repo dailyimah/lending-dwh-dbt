@@ -356,7 +356,7 @@ its rows mutate. Separate immutable schedule + append-only payments keep both lo
 history complete.
 
 **7.4 `fund_record` rolled up into `fact_funding`.** No in-scope question needs the settlement
-timeline; `settled_amount`, `signed_amount` and flags cover lender exposure and settlement status.
+timeline; `settled_amount` and `is_fully_settled` cover lender exposure and settlement status.
 `fact_fund_settlement` (one row per record) is the named extension.
 
 **7.5 Daily snapshot covers active loans only.** Rows run from disbursement to the closing day
