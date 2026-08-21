@@ -80,6 +80,8 @@ models:
   - name: stg_repayment_schedule
     description: "PROPOSED source."
     tests:
+      - dbt_utils.expression_is_true:
+          expression: "abs(due_amount - due_principal - due_interest) <= 1"
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [loan_id, installment_no]
     columns:
@@ -89,10 +91,13 @@ models:
         tests:
           - relationships: {to: ref('stg_loan'), field: loan_id}
   - name: stg_repayment
-    description: "PROPOSED source."
+    description: "PROPOSED source. Amounts must be positive: reversals are not modelled."
     columns:
       - name: repayment_id
         tests: [unique, not_null]
+      - name: paid_amount
+        tests:
+          - dbt_utils.accepted_range: {min_value: 0, inclusive: false}
       - name: loan_id
         tests:
           - relationships: {to: ref('stg_loan'), field: loan_id}

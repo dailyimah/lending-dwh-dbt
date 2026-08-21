@@ -1,9 +1,11 @@
-{{ config(materialized='ephemeral') }}
+{{ config(materialized='table') }}
 /*
   int_repayment_allocation - allocates each raw transfer to installments, oldest due first.
   Running total of payments (by paid_at) vs running total of dues (by installment_no):
   the overlap of the two intervals is how much of a payment lands on an installment.
-  A final "overflow" interval per loan (installment_no NULL) catches payments beyond the schedule.
+  A final "overflow" interval per loan (installment_no NULL) catches payments beyond the schedule,
+  including loans that have payments but no schedule at all. Payments are assumed positive;
+  reversals are not modelled (guarded by a test in staging). Materialized once; read by five models.
   Principal/interest split of an allocation is proportional to the installment's split.
 */
 with sched_base as (
@@ -20,12 +22,13 @@ sched as (
     from sched_base
     union all
     select
-        loan_id,
+        p.loan_id,
         cast(null as {{ dbt.type_string() }}), cast(null as integer), cast(null as date),
         0, 0, 0,
-        sum(due_amount), cast(1e18 as {{ dbt.type_numeric() }})
-    from sched_base
-    group by loan_id
+        coalesce(t.total_due, 0), cast(1e18 as {{ dbt.type_numeric() }})
+    from (select distinct loan_id from {{ ref('stg_repayment') }}) p
+    left join (select loan_id, sum(due_amount) as total_due from sched_base group by loan_id) t
+      on t.loan_id = p.loan_id
 ),
 paid as (
     select

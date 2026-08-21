@@ -385,6 +385,23 @@ for n in range(300):
             i, due, p, it = due_so_far[paid_n]
             pay((p + it) * 0.3, due + timedelta(days=random.randint(5, 30)))
 
+# realism: a customer record must exist before that customer's first loan application
+earliest_request = {}
+for l in loans:
+    d = datetime.strptime(l["created_at"], "%Y-%m-%dT%H:%M:%SZ").date()
+    b = l["borrower_account_id"]
+    earliest_request[b] = min(earliest_request.get(b, d), d)
+for row in individuals + companies:
+    first = earliest_request.get(row["id"])
+    if first is None:
+        continue
+    created = datetime.strptime(row["created_at"], "%Y-%m-%d %H:%M:%S").date()
+    if created >= first:
+        new_created = dt_naive(first - timedelta(days=random.randint(1, 90)))
+        if row["updated_at"] == row["created_at"]:
+            row["updated_at"] = new_created
+        row["created_at"] = new_created
+
 # planted: one transfer covering two installments (pick a repaid installment loan with >=2 inst)
 cands = [l for l, o in loan_outcomes.items() if o["outcome"] == "repaid" and o["mode"] == "installment" and o["tenor"] >= 2]
 target = random.choice(cands)

@@ -42,7 +42,8 @@ fact that needs it so new marts can be added without remodeling.
 
 `dim_customer` unifies `individual` and `company` (a customer can be borrower, lender or both) as
 SCD Type 2: a version opens when the record or the credit score changes; key
-`customer_key = customer_id#sequence_no`; facts store the version valid at event time. Other
+`customer_key = customer_id#sequence_no`; facts store the version valid at event time, so
+`fact_loan` carries the borrower's credit score as it was at request. Other
 dims (`dim_date`, `dim_loan_type`, `dim_movement_status`, `dim_partner`) are plain lookups.
 
 ## Marts
@@ -51,7 +52,7 @@ dims (`dim_date`, `dim_loan_type`, `dim_movement_status`, `dim_partner`) are pla
 |---|---|---|
 | `mart_credit_score_by_segment` | segment type x value (entity type, role, channel, province) | average credit score per customer segment |
 | `mart_delinquency` | day x loan type x partner x grade | delinquency rates: DPD buckets, PAR30, NPL90, TKB90 |
-| `mart_loan_performance` | disbursement cohort x type x partner x grade x mode | loan performance: volumes, outcomes, collections, write-offs, vintage |
+| `mart_loan_performance` | disbursement cohort x type x partner x grade x mode | loan performance: volumes, outcomes, collections, write-offs, first-payment-default rate, 30-DPD vintage, credit score at origination |
 | `mart_customer_360` | current customer | per-customer borrower and lender metrics; feeds the segment mart |
 
 ## Source gaps and assumptions
@@ -63,14 +64,16 @@ dims (`dim_date`, `dim_loan_type`, `dim_movement_status`, `dim_partner`) are pla
   [`ref_movement_status_map.csv`](seeds/reference/ref_movement_status_map.csv).
 - Naive DATETIME columns are treated as Jakarta time (UTC+7).
 - Payments are allocated to installments oldest-due-first, once, at load time.
-- Orphaned foreign keys resolve to an `UNKNOWN` member in every dimension.
+- Orphaned foreign keys resolve to an `UNKNOWN` member in every lookup dimension; fact keys are never NULL.
+- Business dates (due, paid, disbursed) are Jakarta dates; payment amounts are positive (reversals are not modelled).
 
 ## Quality
 
 Singular tests beyond the usual key and relationship checks: allocation is lossless (allocated =
-transferred per loan); the daily snapshot reconciles to `fact_loan`; joining `fact_loan` to its
-dimensions causes no fan-out; SCD2 intervals are contiguous with one current version; `fund_ratio`
-sums to 1 and `loan` status agrees with movement history (both warn - the two planted defects).
+transferred per loan); the daily snapshot reconciles to `fact_loan`; written-off loans carry zero
+outstanding and repaid loans nothing remaining; joining `fact_loan` to its dimensions causes no
+fan-out; SCD2 intervals are contiguous with one current version; `fund_ratio` sums to 1 and `loan`
+status agrees with movement history (both warn - the two planted defects).
 
 ## Decisions
 

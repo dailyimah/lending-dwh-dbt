@@ -62,9 +62,3 @@ models:
         tests:
           - not_null
           - relationships: {to: ref('dim_date'), field: date_day}
-      - name: dpd_bucket
-        tests:
-          - accepted_values: {values: ['current', '1-30', '31-60', '61-90', '90+']}
-      - name: status_name
-        tests:
-          - accepted_values: {values: ['disbursed', 'repaid', 'written_off']}

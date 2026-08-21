@@ -22,7 +22,7 @@ select
     a.loan_id,
     a.schedule_id,
     a.installment_no,
-    fl.borrower_customer_key,
+    coalesce(fl.borrower_customer_key, 'UNKNOWN#1')             as borrower_customer_key,
     fl.loan_type_id,
     fl.partner_id,
     fl.repayment_mode,

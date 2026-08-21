@@ -12,7 +12,7 @@ with cust as (
     select * from {{ ref('stg_company') }}
 ),
 credit as (
-    select customer_id, assessed_at as event_ts, credit_score, assessed_grade
+    select credit_assessment_id, customer_id, assessed_at as event_ts, credit_score, assessed_grade
     from {{ ref('stg_credit_assessment') }}
 ),
 events as (
@@ -39,7 +39,7 @@ attrs as (
 scores as (
     select
         e.customer_id, e.event_ts, cr.credit_score, cr.assessed_grade,
-        row_number() over (partition by e.customer_id, e.event_ts order by cr.event_ts desc) as rn
+        row_number() over (partition by e.customer_id, e.event_ts order by cr.event_ts desc, cr.credit_assessment_id desc) as rn
     from events e
     join credit cr
       on cr.customer_id = e.customer_id

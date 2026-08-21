@@ -37,7 +37,7 @@ select
     f.loan_id,
     f.lender_customer_id,
     coalesce(le.customer_key, 'UNKNOWN#1')                      as lender_customer_key,
-    fl.borrower_customer_key,
+    coalesce(fl.borrower_customer_key, 'UNKNOWN#1')             as borrower_customer_key,
     fl.loan_type_id,
     fl.partner_id,
     fl.grade,

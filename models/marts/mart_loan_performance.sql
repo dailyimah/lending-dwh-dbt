@@ -32,6 +32,10 @@ select
     l.grade,
     l.repayment_mode,
     count(*)                                                            as loans_disbursed,
+    sum(case when {{ dbt.datediff('l.disbursed_date', "date '" ~ var('as_of_date') ~ "'", 'day') }} >= 90 then 1 else 0 end) as loans_mature_90d,
+    sum(case when l.first_due_date is not null and ({{ dbt.datediff('l.first_due_date', "date '" ~ var('as_of_date') ~ "'", 'day') }} > 30 or l.first_fully_paid_date is not null) then 1 else 0 end) as loans_with_observable_fpd,
+    sum(case when l.is_fpd then 1 else 0 end)                           as loans_fpd,
+    avg(l.credit_score_at_request)                                      as avg_credit_score_at_origination,
     sum(l.nominal_loan)                                                 as disbursed_amount,
     avg(l.nominal_loan)                                                 as avg_ticket_size,
     avg(l.tenor_months)                                                 as avg_tenor_months,
@@ -50,8 +54,16 @@ select
          then cast(sum(l.written_off_amount) as {{ dbt.type_float() }}) / cast(sum(l.nominal_loan) as {{ dbt.type_float() }}) end as write_off_rate_by_amount,
     cast(sum(case when l.current_status_name = 'written_off' then 1 else 0 end) as {{ dbt.type_float() }}) / count(*) as write_off_rate_by_count,
     avg(v.max_dpd)                                                      as avg_max_dpd,
-    cast(sum(v.hit_1dpd_within_90d)  as {{ dbt.type_float() }}) / count(*) as share_1dpd_within_90d,
-    cast(sum(v.hit_30dpd_within_90d) as {{ dbt.type_float() }}) / count(*) as share_30dpd_within_90d,
+    -- vintage shares use only loans old enough to have been observed for the full window
+    case when sum(case when {{ dbt.datediff('l.disbursed_date', "date '" ~ var('as_of_date') ~ "'", 'day') }} >= 90 then 1 else 0 end) > 0
+         then cast(sum(case when {{ dbt.datediff('l.disbursed_date', "date '" ~ var('as_of_date') ~ "'", 'day') }} >= 90 then v.hit_1dpd_within_90d else 0 end) as {{ dbt.type_float() }})
+              / sum(case when {{ dbt.datediff('l.disbursed_date', "date '" ~ var('as_of_date') ~ "'", 'day') }} >= 90 then 1 else 0 end) end as share_1dpd_within_90d,
+    case when sum(case when {{ dbt.datediff('l.disbursed_date', "date '" ~ var('as_of_date') ~ "'", 'day') }} >= 90 then 1 else 0 end) > 0
+         then cast(sum(case when {{ dbt.datediff('l.disbursed_date', "date '" ~ var('as_of_date') ~ "'", 'day') }} >= 90 then v.hit_30dpd_within_90d else 0 end) as {{ dbt.type_float() }})
+              / sum(case when {{ dbt.datediff('l.disbursed_date', "date '" ~ var('as_of_date') ~ "'", 'day') }} >= 90 then 1 else 0 end) end as share_30dpd_within_90d,
+    case when sum(case when l.first_due_date is not null and ({{ dbt.datediff('l.first_due_date', "date '" ~ var('as_of_date') ~ "'", 'day') }} > 30 or l.first_fully_paid_date is not null) then 1 else 0 end) > 0
+         then cast(sum(case when l.is_fpd then 1 else 0 end) as {{ dbt.type_float() }})
+              / sum(case when l.first_due_date is not null and ({{ dbt.datediff('l.first_due_date', "date '" ~ var('as_of_date') ~ "'", 'day') }} > 30 or l.first_fully_paid_date is not null) then 1 else 0 end) end as fpd_rate,
     avg(l.days_request_to_disbursement)                                 as avg_days_request_to_disbursement,
     avg(l.approval_haircut_pct)                                         as avg_approval_haircut_pct,
     avg(l.lender_count)                                                 as avg_lender_count,

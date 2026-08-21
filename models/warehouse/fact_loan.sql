@@ -54,6 +54,28 @@ pay as (
            sum(allocated_interest)  as paid_interest_total
     from {{ ref('int_repayment_allocation') }}
     group by loan_id
+),
+-- first installment: due date and the day it was fully covered (first payment default)
+first_inst as (
+    select s.loan_id, s.due_date as first_due_date, s.due_amount as first_due_amount,
+           min(case when a.cum_alloc >= s.due_amount - {{ var('amount_tolerance') }} then a.paid_date end) as first_fully_paid_date
+    from {{ ref('stg_repayment_schedule') }} s
+    left join (
+        select schedule_id, paid_date,
+               sum(allocated_amount) over (partition by schedule_id order by paid_at, repayment_id
+                                           rows between unbounded preceding and current row) as cum_alloc
+        from {{ ref('int_repayment_allocation') }}
+        where installment_no = 1
+    ) a on a.schedule_id = s.schedule_id
+    where s.installment_no = 1
+    group by s.loan_id, s.due_date, s.due_amount
+),
+-- borrower attributes as they were when the loan was requested (SCD2 version)
+cust_at_request as (
+    select c.loan_id, d.credit_score, d.credit_grade as assessed_grade
+    from cust c
+    join {{ ref('dim_customer') }} d on d.customer_key = c.customer_key
+    where c.rn = 1
 )
 select
     l.loan_id,
@@ -69,9 +91,11 @@ select
     l.grade,
     l.nominal_request,
     l.nominal_loan,
-    case when l.nominal_request > 0
+    case when l.nominal_request > 0 and l.nominal_loan > 0
          then cast(l.nominal_request - l.nominal_loan as {{ dbt.type_float() }}) / cast(l.nominal_request as {{ dbt.type_float() }})
-         end                                                    as approval_haircut_pct,
+         end                                                    as approval_haircut_pct,   -- NULL unless approved
+    car.credit_score                                            as credit_score_at_request,
+    car.assessed_grade                                          as credit_grade_at_request,
 
     -- status (movement history is the source of truth)
     ms.current_status_name,
@@ -81,9 +105,10 @@ select
     -- lifecycle milestones (accumulating snapshot)
     ms.requested_at, ms.approved_at, ms.funding_at, ms.disbursed_at,
     ms.repaid_at, ms.written_off_at, ms.rejected_at, ms.cancelled_at, ms.closed_at,
-    cast(ms.disbursed_at as date)                               as disbursed_date,
-    cast(ms.closed_at as date)                                  as closed_date,
-    cast(extract(year from ms.disbursed_at) * 100 + extract(month from ms.disbursed_at) as integer) as disbursement_cohort,
+    cast({{ dbt.dateadd('hour', var('source_utc_offset_hours'), 'ms.disbursed_at') }} as date)   as disbursed_date,    -- business dates in Jakarta time
+    cast({{ dbt.dateadd('hour', var('source_utc_offset_hours'), 'ms.closed_at') }} as date)      as closed_date,
+    cast(extract(year from cast({{ dbt.dateadd('hour', var('source_utc_offset_hours'), 'ms.disbursed_at') }} as date)) * 100
+       + extract(month from cast({{ dbt.dateadd('hour', var('source_utc_offset_hours'), 'ms.disbursed_at') }} as date)) as integer) as disbursement_cohort,
     {{ dbt.datediff('ms.requested_at', 'ms.disbursed_at', 'day') }} as days_request_to_disbursement,
 
     -- disbursement, insurance, funding roll-ups
@@ -99,10 +124,21 @@ select
     coalesce(pay.paid_amount_total, 0)                          as paid_amount_total,
     coalesce(pay.paid_principal_total, 0)                       as paid_principal_total,
     coalesce(pay.paid_interest_total, 0)                        as paid_interest_total,
-    case when ms.disbursed_at is not null
+    -- outstanding is zero once a loan is written off; the residual moves to written_off_amount
+    case when ms.written_off_at is not null then 0
+         when ms.disbursed_at is not null
          then greatest(l.nominal_loan - coalesce(pay.paid_principal_total, 0), 0) end as outstanding_principal,
     case when ms.written_off_at is not null
          then greatest(l.nominal_loan - coalesce(pay.paid_principal_total, 0), 0) else 0 end as written_off_amount,
+
+    -- first payment default: first installment not covered within 30 days of its due date
+    fi.first_due_date,
+    fi.first_fully_paid_date,
+    case when fi.first_fully_paid_date is not null then {{ dbt.datediff('fi.first_due_date', 'fi.first_fully_paid_date', 'day') }}
+         when fi.first_due_date is not null then {{ dbt.datediff('fi.first_due_date', "date '" ~ var('as_of_date') ~ "'", 'day') }} end as first_installment_days_late,
+    case when fi.first_due_date is null then null
+         when fi.first_fully_paid_date is not null then {{ dbt.datediff('fi.first_due_date', 'fi.first_fully_paid_date', 'day') }} > 30
+         else {{ dbt.datediff('fi.first_due_date', "date '" ~ var('as_of_date') ~ "'", 'day') }} > 30 end as is_fpd,
 
     l.source_updated_at
 from l
@@ -114,3 +150,5 @@ left join ins  on ins.loan_id = l.loan_id
 left join fnd  on fnd.loan_id = l.loan_id
 left join sch  on sch.loan_id = l.loan_id
 left join pay  on pay.loan_id = l.loan_id
+left join first_inst fi on fi.loan_id = l.loan_id
+left join cust_at_request car on car.loan_id = l.loan_id

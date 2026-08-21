@@ -10,7 +10,7 @@ the way it is.
 | `loan.movement_status_id` is INTEGER, `movement_status.movement_id` is STRING | cast in `stg_loan`; relationship test |
 | `individual`, `company`, `insurance` use DATETIME (no zone); other tables TIMESTAMP | to UTC with a fixed UTC+7 offset (`source_utc_offset_hours` var) |
 | `loan.movement_status_id` and `loan_movement` both describe status | history is the source of truth; disagreement flagged by `fact_loan.has_status_mismatch` (warn) |
-| `company.founded` is a free STRING | `YYYY`, `YYYY-MM-DD`, `MM/YYYY` parsed; other shapes NULL |
+| `company.founded` is a free STRING | `YYYY`, `YYYY-MM-DD`, `MM/YYYY` parsed with a safe cast; other shapes or invalid dates NULL |
 | `fund.fund_ratio` = "ratio of funds contributed by the lender" | read as the lender's share of the loan, expected to sum to 1 (warn test) |
 | `is_borrower` / `is_lender` on both `individual` and `company` | one `dim_customer` with `entity_type` and `customer_role` |
 | foreign keys may be orphaned | `UNKNOWN` member in every dimension |
@@ -36,7 +36,10 @@ table. Minimal shapes, kept in
   movement history is the only lifecycle signal. Change: the seed's `is_active_book` flag.
 - Naive DATETIME is Jakarta time (UTC+7, no DST). Change: `source_utc_offset_hours`.
 - Payments are allocated oldest-due-first with a proportional principal/interest split, the
-  standard lending convention. Change: `int_repayment_allocation`.
+  standard lending convention. Amounts are assumed positive (tested); reversals would need
+  explicit netting before allocation. Change: `int_repayment_allocation`.
+- Business dates (due, paid, disbursed, closed) are Jakarta calendar dates, so a payment at
+  18:00 UTC counts on the next local day.
 - `loanhub_loan` is a 0..1 partner mapping (ERD label "maps"); no mapping means `DIRECT`.
 - `lender_type` is derived from `entity_type` (company = institutional) until a master-data
   attribute exists.
@@ -56,7 +59,8 @@ are conformed into one dimension.
 ## SCD2 worked example
 
 A borrower re-scored twice; each change opens a version and facts reference the version valid at
-their event time.
+their event time - `fact_loan.credit_score_at_request` is read this way, and
+`mart_loan_performance` reports the average score at origination per cohort.
 
 | customer_key | city_id | credit_score | valid_from | valid_to | is_current |
 |---|---|---|---|---|---|
@@ -81,7 +85,7 @@ A single transfer covering two installments yields two rows the same way; `trans
 
 | Chose | Rejected | Why |
 |---|---|---|
-| deterministic key `customer_id#sequence_no` | opaque integer surrogate | same input gives the same key, so a rebuild never breaks fact FKs |
+| deterministic key `customer_id#sequence_no` | opaque integer surrogate | a full rebuild reproduces the same keys; late-arriving history would renumber, acceptable while loads are full-refresh |
 | allocation at load time | raw transfers, allocate per query | one DPD definition everywhere |
 | schedule + payments as two facts | one installment row updated in place | partial and merged payments keep their detail |
 | snapshot of active loans only | every loan every day | size tracks the live book |

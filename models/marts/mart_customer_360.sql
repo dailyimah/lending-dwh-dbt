@@ -18,7 +18,8 @@ loans as (
         sum(case when disbursed_at is not null then nominal_loan else 0 end) as total_disbursed_amount,
         sum(case when current_status_name = 'disbursed' then outstanding_principal else 0 end) as current_outstanding_principal,
         sum(written_off_amount)                                              as total_written_off_amount,
-        sum(paid_amount_total)                                               as total_paid_amount
+        sum(paid_amount_total)                                               as total_paid_amount,
+        min(disbursed_date)                                                  as first_disbursed_date
     from {{ ref('fact_loan') }}
     group by borrower_customer_id
 ),
@@ -66,6 +67,7 @@ select
     coalesce(l.current_outstanding_principal, 0) as current_outstanding_principal,
     coalesce(l.total_written_off_amount, 0)      as total_written_off_amount,
     coalesce(l.total_paid_amount, 0)             as total_paid_amount,
+    l.first_disbursed_date,
     coalesce(sn.max_dpd_ever, 0)                 as max_dpd_ever,
     coalesce(sn.current_dpd, 0)                  as current_dpd,
     case

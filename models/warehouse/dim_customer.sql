@@ -21,17 +21,21 @@ versions as (
     select
         *,
         row_number() over (partition by customer_id order by event_ts)     as sequence_no,
-        event_ts                                                           as valid_from,
+        -- the first version is valid from the record's creation, not from its first change
+        case when row_number() over (partition by customer_id order by event_ts) = 1
+             then least(event_ts, source_created_at) else event_ts end      as valid_from,
         lead(event_ts) over (partition by customer_id order by event_ts)   as next_valid_from
     from v
 ),
--- acquisition channel = channel of the customer's first loan
+-- acquisition channel = channel of the customer's first DISBURSED loan (rejected applications do not count)
 first_loan as (
     select
         l.borrower_customer_id as customer_id,
         case when lh.loan_id is not null then 'partner' else 'direct' end as origination_channel,
-        row_number() over (partition by l.borrower_customer_id order by l.requested_at, l.loan_id) as rn
+        row_number() over (partition by l.borrower_customer_id order by d.disbursed_at, l.loan_id) as rn
     from {{ ref('stg_loan') }} l
+    join (select loan_id, min(disbursed_at) as disbursed_at from {{ ref('stg_disbursement') }} group by loan_id) d
+      on d.loan_id = l.loan_id
     left join {{ ref('stg_loanhub_loan') }} lh on lh.loan_id = l.loan_id
 )
 select
