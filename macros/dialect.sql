@@ -101,3 +101,15 @@
 {% macro duckdb__day_of_week(col) -%}
   isodow({{ col }})
 {%- endmacro %}
+
+
+{#- BigQuery partition config; returns none on other adapters (dbt-duckdb reserves the
+    partition_by key for its own string/list form). Usage in config():
+      partition_by=bq_partition('disbursed_date', 'month') -#}
+{% macro bq_partition(field, granularity='day', data_type='date') -%}
+  {%- if target.type == 'bigquery' -%}
+    {{ return({'field': field, 'data_type': data_type, 'granularity': granularity}) }}
+  {%- else -%}
+    {{ return(none) }}
+  {%- endif -%}
+{%- endmacro %}

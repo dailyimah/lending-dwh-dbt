@@ -20,6 +20,10 @@ vars:
   direct_channel_key: "DIRECT"              # dim_partner member for non-partner loans
   scd_open_end: "9999-12-31"
   reporting_timezone: "Asia/Jakarta"        # WIB; sources normalized to UTC in staging
+  as_of_date: "2026-08-21"                  # snapshot horizon; synthetic data is generated up to this date.
+                                            # In production: override with current_date via --vars or leave unset logic in macros/as_of.sql
+  payment_allocation_rule: "oldest_due_first"   # documented assumption; principal/interest split is proportional
+  amount_tolerance: 1                       # IDR; rounding tolerance for "fully paid / fully settled" flags
 
 models:
   fazz_dwh:

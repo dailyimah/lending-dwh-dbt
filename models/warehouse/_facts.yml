@@ -1,0 +1,83 @@
+version: 2
+
+models:
+  - name: fact_loan
+    description: "Accumulating snapshot; one row per loan. Milestones, channel, funding/insurance roll-ups, repayment totals, outstanding principal."
+    columns:
+      - name: loan_id
+        tests: [unique, not_null]
+      - name: borrower_customer_key
+        tests:
+          - not_null
+          - relationships: {to: ref('dim_customer'), field: customer_key}
+      - name: loan_type_id
+        tests:
+          - relationships: {to: ref('dim_loan_type'), field: loan_type_id}
+      - name: partner_id
+        tests:
+          - not_null
+          - relationships: {to: ref('dim_partner'), field: partner_id}
+      - name: current_movement_id
+        tests:
+          - relationships: {to: ref('dim_movement_status'), field: movement_id}
+      - name: origination_channel
+        tests:
+          - accepted_values: {values: ['direct', 'partner']}
+      - name: has_status_mismatch
+        description: "True when loan.movement_status_id disagrees with the latest loan_movement (planted issue). Surfaced, not hidden."
+        tests:
+          - accepted_values:
+              values: [false]
+              severity: warn
+  - name: fact_repayment_schedule
+    description: "Immutable expected installments; one row per (loan, installment)."
+    tests:
+      - unique_combination:
+          combination_of_columns: [loan_id, installment_no]
+    columns:
+      - name: schedule_id
+        tests: [unique, not_null]
+      - name: loan_id
+        tests:
+          - relationships: {to: ref('fact_loan'), field: loan_id}
+  - name: fact_repayment
+    description: "One payment applied to one installment; transfer_id preserved."
+    columns:
+      - name: repayment_allocation_key
+        tests: [unique, not_null]
+      - name: loan_id
+        tests:
+          - relationships: {to: ref('fact_loan'), field: loan_id}
+      - name: allocated_amount
+        tests: [not_null]
+  - name: fact_funding
+    description: "One lender commitment to one loan; fund_record rolled up."
+    columns:
+      - name: fund_id
+        tests: [unique, not_null]
+      - name: lender_customer_key
+        tests:
+          - not_null
+          - relationships: {to: ref('dim_customer'), field: customer_key}
+      - name: loan_id
+        tests:
+          - relationships: {to: ref('fact_loan'), field: loan_id}
+  - name: fact_loan_daily_snapshot
+    description: "One active loan per day from disbursement through closing day; outstanding, overdue, DPD, OJK bucket."
+    tests:
+      - unique_combination:
+          combination_of_columns: [snapshot_date, loan_id]
+    columns:
+      - name: snapshot_date
+        tests:
+          - not_null
+          - relationships: {to: ref('dim_date'), field: date_day}
+      - name: loan_id
+        tests:
+          - relationships: {to: ref('fact_loan'), field: loan_id}
+      - name: dpd_bucket
+        tests:
+          - accepted_values: {values: ['current', '1-30', '31-60', '61-90', '90+']}
+      - name: status_name
+        tests:
+          - accepted_values: {values: ['disbursed', 'repaid', 'written_off']}
