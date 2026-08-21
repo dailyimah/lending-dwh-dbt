@@ -22,8 +22,10 @@ nav() {  # $1 = current page key: home | details
   sed -e '/^# Fazz Data Engineer Case Study/d' \
       -e '/^\[!\[build-and-publish\]/d' \
       -e '/^\*\*Live site:\*\*/d' \
-      -e 's#docs/diagrams/#diagrams/#g' \
-      -e 's#docs/design_details.md#design_details.md#g' \
+      -e 's#https://github.com/dailyimah/lending-dwh-dbt/blob/main/docs/design_details.md#design_details.html#g' \
+      -e 's#https://github.com/dailyimah/lending-dwh-dbt/tree/main/docs/diagrams#diagrams/#g' \
+      -e 's#](docs/diagrams/#](diagrams/#g' \
+      -e 's#](docs/design_details.md#](design_details.md#g' \
       -e 's#Lineage and column docs:.*$#Lineage and column docs: [dbt docs](dbt/).#' \
       README.md
 } > site/index.md
