@@ -19,14 +19,14 @@ flowchart LR
 
     subgraph WH[warehouse - tables]
         D["dim_* (5)"]
-        F["fact_* (5)<br/>snapshot incremental by day"]
+        F["fact_* (5)"]
     end
 
     subgraph MT[marts - tables]
         M["mart_* (4)"]
     end
 
-    T["tests<br/>~125 generic + 10 singular"]
+    T["tests<br/>generic + 10 singular"]
 
     G & P --> S
     R --> D

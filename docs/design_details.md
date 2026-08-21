@@ -8,8 +8,8 @@ synthetic data).
 |---|---|
 | Stack | dbt-core 1.12 - models written for **BigQuery** - run locally on **DuckDB** (no credentials needed) |
 | Model | 5 facts - 5 conformed dimensions (customer = SCD Type 2) - 4 marts - 3 intermediate |
-| Quality | 151 dbt nodes: 149 pass, 2 intentional `warn`s that surface planted source defects |
-| Run it | `uv sync && DBT_PROFILES_DIR=. uv run dbt build` |
+| Quality | all dbt tests pass except 2 intentional `warn`s that surface planted source defects |
+| Run it | `uv sync && uv run dbt deps && DBT_PROFILES_DIR=. uv run dbt build` |
 
 ---
 
@@ -23,7 +23,6 @@ synthetic data).
 6. [Data quality & validity checks](#6-data-quality--validity-checks)
 7. [Design decisions & trade-offs](#7-design-decisions--trade-offs)
 8. [Scope limits & extensions](#8-scope-limits--extensions)
-9. [Appendix - questions the model answers](#9-appendix--questions-the-model-answers)
 
 ---
 
@@ -84,7 +83,7 @@ separated from the given tables in `seeds/proposed/`):
 - All amounts are IDR.
 - Synthetic data horizon (`as_of_date`) is 2026-08-21; in production this resolves to the run date.
 
-> **Design principle - "grounded or parameterized":** no numeric threshold enters the model unless it is present in the source, defined by regulation, or declared once as a named parameter in `dbt_project.yml` (`vars`).
+> **Design principle:** no numeric threshold enters the model unless it is present in the source or defined by regulation.
 
 ---
 
@@ -172,14 +171,16 @@ flowchart LR
 **`dim_customer` - SCD Type 2.** Grain: one row per customer *version*.
 Key: `customer_key = customer_id#sequence_no` - a deterministic surrogate (see Section 7.1).
 
-| Column group | Columns | SCD treatment |
-|---|---|---|
-| Keys | `customer_key`, `customer_id` (natural), `sequence_no` | - |
-| Fixed | `entity_type` (individual / company) | - |
-| **Type 2** (new version on change) | `customer_role`, `is_borrower`, `is_lender`, `identity_card_type`, `country_id`, `province_id`, `city_id`, `district_id`, `credit_score` (+ `credit_grade`) | versioned - address and role are what regulators ask "as of when" |
-| Type 1 (overwrite) | `customer_name`, `email`, `phone_number`, `founded_date`, `pic_name`, `nib_number` | latest value carried; typo fixes do not create versions |
-| Derived | `lender_type` (retail / institutional), `origination_channel` (channel of the customer's *first* loan) | - |
-| Validity | `valid_from`, `valid_to` (`9999-12-31` when open), `is_current` | - |
+| Column group | Columns |
+|---|---|
+| Keys | `customer_key`, `customer_id` (natural), `sequence_no` |
+| Attributes | `entity_type`, `customer_name`, `email`, `phone_number`, `identity_card_type`, geography (`country_id` ... `district_id`), `is_borrower`, `is_lender`, `customer_role`, `credit_score`, `credit_grade`, company fields (`founded_date`, `pic_name`, `nib_number`) |
+| Derived | `lender_type` (retail / institutional), `origination_channel` (channel of the customer's first loan) |
+| Validity | `valid_from`, `valid_to` (`9999-12-31` when open), `is_current` |
+
+A new version opens whenever the source record or the credit score changes (staging already drops
+no-change re-touches). Which attributes *should* version is a policy decision: in production with
+current-state sources it is the `check_cols` list of a `dbt snapshot`.
 
 Example - a borrower re-scored twice; the two versions carry different `valid_from`/`valid_to`:
 
@@ -208,7 +209,7 @@ never carry NULL keys.
 | `fact_repayment_schedule` | due principal/interest/amount, allocated paid amounts, `fully_paid_date`, `is_paid_in_parts`, `days_late_to_full_payment`, `days_past_due_as_of` | partition `due_date` - cluster `loan_id` |
 | `fact_repayment` | `allocated_amount/principal/interest`, `days_late` (negative = early), `is_overpayment` | partition `paid_date` - cluster `loan_id` |
 | `fact_funding` | `committed_amount`, `fund_ratio`, `settled_amount`, `signed_amount`, `is_fully_settled`, `current_exposure_amount` (= share x loan outstanding) | partition `funded_date` - cluster `lender_customer_id` |
-| `fact_loan_daily_snapshot` | `outstanding_principal`, `overdue_amount`, `days_past_due`, `dpd_bucket`, `is_npl_90`, `is_closing_day`; **incremental by day** (`delete+insert` on the day partition -> idempotent reruns) | partition `snapshot_date` (day) - cluster `loan_id` |
+| `fact_loan_daily_snapshot` | `outstanding_principal`, `overdue_amount`, `days_past_due`, `dpd_bucket`, `is_npl_90`, `is_closing_day`; rebuilt in full here, incremental by day in production | partition `snapshot_date` (day) - cluster `loan_id` |
 
 Partitioning/clustering is declared through a target-aware macro (`bq_partition`) so the same
 models run on DuckDB locally and are partitioned on BigQuery.
@@ -277,14 +278,6 @@ Grain: `disbursement_cohort x loan_type x partner x grade x repayment_mode`. Vol
 | C | 67 | 495 | 0.045 | 0.965 | 0.080 |
 | D | 33 | 260 | 0.182 | 0.632 | 0.144 |
 
-### 4.5 Lender portfolio (served from `mart_customer_360`)
-
-```sql
-select lender_type, count(*) as lenders, sum(current_exposure_amount) as exposure,
-       sum(current_exposure_amount) / sum(sum(current_exposure_amount)) over () as exposure_share
-from mart_customer_360 where fundings_count > 0 group by 1;
--- retail 49 lenders 78.9% - institutional 17 lenders 21.1% - top-3 lenders hold 26.5% of exposure
-```
 
 ---
 
@@ -296,26 +289,24 @@ flowchart LR
     STG --> INT["intermediate (ephemeral)<br/>customer change stream -<br/>loan milestones - payment allocation"]
     INT --> WH["warehouse<br/>5 dims - 5 facts"]
     WH --> MT["marts (4)"]
-    STG & WH & MT -.-> T["tests: ~125 generic + 10 singular"]
+    STG & WH & MT -.-> T["tests: generic + 10 singular"]
 ```
 
 | Layer | Materialization | Responsibility |
 |---|---|---|
 | `models/staging/` | view | One model per source table. Type casting (incl. the INTEGER->STRING FK fix), timezone normalization, `founded` parsing, consistent naming, dropping no-change duplicate rows **while keeping history** (SCD2 input) |
 | `models/intermediate/` | ephemeral | `int_customer_versions` (unified change stream with point-in-time credit score), `int_loan_milestones` (first time each status was reached), `int_repayment_allocation` (oldest-due-first allocation) |
-| `models/warehouse/` | table / incremental | Dimensions then facts. Facts resolve `customer_key` as of event time; the snapshot is incremental by day |
+| `models/warehouse/` | table | Dimensions then facts. Facts resolve `customer_key` as of event time |
 | `models/marts/` | table | Thin aggregations over dims + facts only |
 
-Load order is the dbt DAG (`dbt build`). Parameters live in one place - `dbt_project.yml -> vars`:
-DPD bucket edges, TKB threshold, `UNKNOWN`/`DIRECT` member keys, SCD open-end date, reporting
-timezone, allocation rule, amount tolerance, `as_of_date`.
+Load order is the dbt DAG (`dbt build`). Three parameters live in `dbt_project.yml -> vars`:
+reporting timezone, `as_of_date`, amount tolerance.
 
 **Production notes.** Seeds would be replaced by `sources:` on raw BigQuery datasets. The
 customer dimension is derived from a history-carrying change stream here; with current-state-only
-sources the identical Type-2 policy runs as a `dbt snapshot` (`strategy: check`, `check_cols` =
-the Type-2 column list). Facts other than the snapshot are full-refresh at this scale; at
-production volume `fact_repayment` and `fact_funding` become incremental on their date partitions
-with the same `delete+insert` pattern used by the snapshot.
+sources the same policy runs as a `dbt snapshot` (`strategy: check`). All models are full-refresh
+at this scale; at production volume the daily snapshot, `fact_repayment` and `fact_funding` become
+incremental on their date partitions (`delete+insert` over a trailing window to absorb late data).
 
 ---
 
@@ -325,7 +316,7 @@ Tests run with `dbt test` (or as part of `dbt build`) and sit next to the models
 
 | Check | Where | Catches |
 |---|---|---|
-| `unique` / `not_null` on every key; `unique_combination` on composite keys | all layers | duplicate or missing keys |
+| `unique` / `not_null` on every key; `dbt_utils.unique_combination_of_columns` on composite keys | all layers | duplicate or missing keys |
 | `relationships` (fact -> dim, child -> parent) | staging, warehouse | orphaned foreign keys |
 | `accepted_values` (status names, modes, channels, buckets) | staging, warehouse, marts | unexpected codes |
 | `assert_repayment_allocation_is_lossless` | warehouse | allocation creating or losing money |
@@ -383,12 +374,11 @@ fact is the extension if intraday or repeated-transition analysis is needed.
 **7.7 Normalize vs denormalize.** Sources are ~3NF; the warehouse is a star. Geography is
 denormalized into `dim_customer`; descriptive partner/loan-type attributes are dimensions, not fact
 columns; metrics are kept out of dimensions (customer behaviour lives in `mart_customer_360`).
-Per-loan facts that vary by loan (`partner_commission_pa`) stay on the fact rather than the
-dimension.
+Attributes that vary per loan stay on the fact rather than the dimension.
 
 **7.8 No invented thresholds.** A behavioural `lender_type` rule (`fund_ratio >= 0.9`) and
 loan-size tiers were rejected as arbitrary; segmentation uses source attributes only, and the
-only numeric cut-offs (DPD buckets, TKB90) are regulatory and parameterized.
+only numeric cut-offs (DPD buckets, TKB90) are regulatory.
 
 ---
 
@@ -406,36 +396,7 @@ daily series (already derivable from `mart_delinquency`).
 
 ---
 
-## 9. Appendix - questions the model answers
-
-Beyond the three required marts, the same five facts and conformed dimensions answer, without
-remodeling:
-
-- **Credit risk** - delinquency by channel / grade / repayment mode / province; vintage curves by disbursement cohort; repeat vs first-time borrowers; is the credit score calibrated against realised DPD?
-- **Regulatory** - TKB90 for any date; daily loan-level position; borrower attributes *as they were* when a loan was booked (SCD2); borrower concentration.
-- **Treasury / lender relations** - institutional vs retail funding share; top-lender concentration; lender exposure to delinquent loans; unsettled or unsigned commitments.
-- **Operations** - request -> approval -> disbursement conversion and durations; approval haircut by grade; amount due next week vs collected last week; share of installments paid in parts.
-- **Channel** - volume and performance per partner; partner commission base (`partner_commission_pa` x outstanding).
 
 ---
 
-### Repository layout
-
-```
-fazz_dwh/
-|-- README.md                      <- this document
-|-- dbt_project.yml                <- layer configs + all parameters (vars)
-|-- profiles.yml                   <- duckdb (local) and bigquery (prod) targets
-|-- seeds/
-|   |-- generate_seeds.py          <- synthetic source generator (fixed seed, planted defects)
-|   |-- given/                     <- 10 tables per the PDF specs
-|   |-- proposed/                  <- repayment_schedule, repayment, credit_assessment
-|   `-- reference/                 <- loan type and partner lookups (placeholder names)
-|-- macros/                        <- dialect dispatch (BigQuery/DuckDB), DPD buckets, partitioning
-|-- models/{staging,intermediate,warehouse,marts}/
-|-- tests/                         <- singular DQ tests + generic test definitions
-`-- docs/
-    `-- diagrams/                  <- mermaid sources + PNG exports
-```
-
-Generate docs and lineage locally with `uv run dbt docs generate && uv run dbt docs serve`.
+Repository layout and run instructions: see `README.md`.

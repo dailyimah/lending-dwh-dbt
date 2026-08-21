@@ -6,11 +6,12 @@ data, so the whole thing builds without credentials.
 
 ```bash
 uv sync                                   # creates .venv from pyproject.toml / uv.lock
+uv run dbt deps                           # installs dbt_utils
 DBT_PROFILES_DIR=. uv run dbt build       # seeds -> staging -> dims -> facts -> marts -> tests
 ```
 
-**5 facts - 5 conformed dimensions (customer = SCD Type 2) - 4 marts - 151 dbt nodes: 149 pass,
-2 intentional `warn`s that surface planted source defects.**
+**5 facts - 5 conformed dimensions (customer = SCD Type 2) - 4 marts. All tests pass except two
+intentional `warn`s that surface planted source defects.**
 Full design rationale: [`docs/design_details.md`](docs/design_details.md). Lineage and column docs:
 `uv run dbt docs generate && uv run dbt docs serve`.
 
@@ -42,8 +43,7 @@ pre-allocated), `credit_assessment` (point-in-time score).
 `origination_channel` direct/partner. Payments are allocated oldest-due-first. `lender_type` is
 derived from `entity_type` (company -> institutional) pending a real master-data attribute.
 Segmentation uses only source-present attributes - no invented thresholds; the only numeric
-cut-offs are the OJK DPD buckets (current / 1-30 / 31-60 / 61-90 / >90) and TKB90, all
-parameterized in `dbt_project.yml` vars.
+cut-offs are the OJK DPD buckets (current / 1-30 / 31-60 / 61-90 / >90) and the TKB90 line.
 
 ---
 
@@ -60,13 +60,14 @@ Conceptual ERD: [`docs/diagrams/01_conceptual_erd.png`](docs/diagrams/01_concept
 | `fact_repayment_schedule` | one expected installment | transactional, immutable |
 | `fact_repayment` | one payment **applied to one installment** (`transfer_id` preserved) | transactional, append-only |
 | `fact_funding` | one lender commitment to one loan (`fund_record` rolled up; `current_exposure_amount`) | transactional |
-| `fact_loan_daily_snapshot` | one **active** loan per day through its closing day: outstanding, overdue, DPD, bucket, `is_npl_90` | periodic snapshot, incremental by day |
+| `fact_loan_daily_snapshot` | one **active** loan per day through its closing day: outstanding, overdue, DPD, bucket, `is_npl_90` | periodic snapshot |
 
-**`dim_customer` (SCD2).** `individual` union `company`; one row per version;
-`customer_key = customer_id#sequence_no` (deterministic surrogate - rebuild-safe, readable, no
-sequences needed on BigQuery). Type 2: role flags, identity type, geography, `credit_score`.
-Type 1: name, email, phone, company fields. Facts store the version valid at event time.
-Geography is denormalized into the dimension (star, not snowflake).
+**`dim_customer` (SCD2).** `individual` union `company`; one row per version, opened whenever the
+source record or the credit score changes; `customer_key = customer_id#sequence_no` (deterministic
+surrogate - rebuild-safe, readable, no sequences needed on BigQuery). Facts store the version valid
+when the loan was requested / the funding was made. Geography is denormalized into the dimension
+(star, not snowflake). In production, with current-state-only sources, the same policy is a
+`dbt snapshot` with `check_cols`.
 
 Small dims (natural keys, no SCD): `dim_date`, `dim_loan_type`, `dim_movement_status`
 (lifecycle order, terminal flags), `dim_partner` (+ `DIRECT` member).
@@ -102,13 +103,13 @@ seeds (sources) -> staging views -> intermediate (ephemeral) -> warehouse (dims,
                    FK type fix           loan milestones - payment allocation
 ```
 
-Tests run with `dbt build`: key uniqueness/not-null, relationships, accepted values, plus singular
-checks - allocation is lossless, snapshot reconciles to `fact_loan`, no join fan-out, SCD2
-intervals contiguous with one current row, `fund_ratio` sums to 1 (warn), status consistency
-(warn), schedule principal = loan amount, lifecycle timestamps ordered.
+Tests run with `dbt build`: key uniqueness/not-null, relationships, accepted values (generic and
+`dbt_utils`), plus singular checks - allocation is lossless, snapshot reconciles to `fact_loan`,
+no join fan-out, SCD2 intervals contiguous with one current row, `fund_ratio` sums to 1 (warn),
+status consistency (warn), schedule principal = loan amount, lifecycle timestamps ordered.
 
-Production: seeds become `sources:`; the Type-2 policy runs as a `dbt snapshot` (`strategy:
-check`) once sources expose current state only; large facts go incremental on their date partition.
+Production: seeds become `sources:`; the customer SCD2 runs as a `dbt snapshot`; the daily snapshot
+and large facts go incremental on their date partition with delete+insert over a trailing window.
 
 ---
 
@@ -125,10 +126,11 @@ check`) once sources expose current state only; large facts go incremental on th
 
 ```
 pyproject.toml - uv.lock              dependencies (dbt-core, dbt-duckdb; optional dbt-bigquery)
-dbt_project.yml - profiles.yml        parameters (vars) - duckdb/bigquery targets
+packages.yml                          dbt_utils
+dbt_project.yml - profiles.yml        3 vars (timezone, as_of_date, tolerance) - duckdb/bigquery targets
 seeds/{given,proposed,reference}/     sources; generate_seeds.py
 macros/                               BigQuery/DuckDB dispatch, DPD buckets, partitioning
 models/{staging,intermediate,warehouse,marts}/
-tests/                                singular DQ tests, generic test defs
+tests/                                singular DQ tests
 docs/{diagrams,design_details.md}
 ```
