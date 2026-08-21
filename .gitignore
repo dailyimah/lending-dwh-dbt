@@ -6,3 +6,5 @@ logs/
 .venv/
 __pycache__/
 .user.yml
+site/
+_site/

@@ -1,5 +1,8 @@
 # Fazz Data Engineer Case Study - Task 1: Lending Data Warehouse
 
+[![build-and-publish](https://github.com/dailyimah/lending-dwh-dbt/actions/workflows/pages.yml/badge.svg)](https://github.com/dailyimah/lending-dwh-dbt/actions/workflows/pages.yml)
+**Live site:** https://dailyimah.github.io/lending-dwh-dbt/ - landing page, [dbt docs (lineage and catalog)](https://dailyimah.github.io/lending-dwh-dbt/dbt/), design details.
+
 Dimensional warehouse + data marts for a P2P lending business, delivered as a runnable **dbt**
 project. Models are written for **BigQuery**; they run locally on **DuckDB** against synthetic
 data, so the whole thing builds without credentials.
@@ -114,4 +117,5 @@ seeds/{given,proposed,reference}/  PDF tables / proposed gaps / placeholder look
 models/{staging,intermediate,warehouse,marts}/
 tests/                             singular data-quality tests
 docs/                              design_details.md, diagrams/
+.github/workflows/pages.yml        CI: dbt build + tests on DuckDB, dbt docs, deploy to GitHub Pages
 ```
