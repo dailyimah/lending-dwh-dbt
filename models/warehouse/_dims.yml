@@ -40,7 +40,9 @@ models:
       - name: movement_id
         tests: [unique, not_null]
       - name: status_name
-        tests: [unique, not_null]
+        tests:
+          - not_null
+          - accepted_values: {values: ['requested','approved','rejected','cancelled','funding','disbursed','repaid','written_off','unmapped','unknown']}
   - name: dim_partner
     columns:
       - name: partner_id

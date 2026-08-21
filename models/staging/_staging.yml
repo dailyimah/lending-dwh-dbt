@@ -29,9 +29,6 @@ models:
     columns:
       - name: movement_id
         tests: [unique, not_null]
-      - name: status_name
-        tests:
-          - accepted_values: {values: ['requested','approved','rejected','funding','disbursed','repaid','written_off','cancelled']}
   - name: stg_disbursement
     columns:
       - name: disbursement_id

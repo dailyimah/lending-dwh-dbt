@@ -1,0 +1,9 @@
+description_raw,lifecycle_stage,lifecycle_order,is_terminal,is_active_book
+requested,requested,10,false,false
+approved,approved,20,false,false
+rejected,rejected,25,true,false
+cancelled,cancelled,26,true,false
+funding,funding,30,false,false
+disbursed,disbursed,40,false,true
+repaid,repaid,50,true,false
+written_off,written_off,55,true,false

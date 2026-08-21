@@ -184,7 +184,7 @@ movement_status = [
 ]
 STATUS_ID = {d: int(m) for m, d in MOVEMENT_STATUS}
 
-LOAN_TYPES = ["LT01", "LT02", "LT03"]  # personal, business, agent_working_capital
+LOAN_TYPES = ["LT01", "LT02", "LT03"]  # placeholder ids: personal, business, working_capital
 PARTNERS = ["PTR-AGEN", "PTR-ECOM", "PTR-FIN"]
 GRADES = ["A", "B", "C", "D", "E"]
 GRADE_RATE = {"A": 0.015, "B": 0.02, "C": 0.025, "D": 0.03, "E": 0.035}  # flat monthly

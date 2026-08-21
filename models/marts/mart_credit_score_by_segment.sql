@@ -2,13 +2,12 @@
 /*
   mart_credit_score_by_segment - average credit score per customer segment (task mart 4a),
   with realised-risk context. LONG format: one row per (segment_type, segment_value).
-  Segments use only source-grounded attributes.
+  Segments come from source-present customer attributes (channel is derived from loanhub_loan).
 */
 {% set segments = {
     'entity_type':         'entity_type',
     'customer_role':       'customer_role',
     'origination_channel': "coalesce(origination_channel, 'no_loan')",
-    'credit_grade':        "coalesce(credit_grade, 'unscored')",
     'province':            "coalesce(province_id, 'unknown')"
 } %}
 {% for seg_name, seg_expr in segments.items() %}

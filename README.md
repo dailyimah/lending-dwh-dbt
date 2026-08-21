@@ -22,28 +22,51 @@ Full design rationale: [`docs/design_details.md`](docs/design_details.md). Linea
 Ten table specs and an ERD were provided; **no data rows**. The specs are treated as the source
 contract and exercised with synthetic data (`seeds/generate_seeds.py`).
 
-Issues found in the specs, each handled explicitly in staging:
+What the specs say vs. how the warehouse treats it (each handled explicitly in staging):
 
-| Issue | Handling |
+| Spec | Treatment |
 |---|---|
 | `loan.movement_status_id` is INTEGER, `movement_status.movement_id` is STRING | cast in `stg_loan`; relationship test |
-| `individual`, `company`, `insurance` use naive DATETIME, others TIMESTAMP | -> UTC with a fixed UTC+7 offset (Jakarta, no DST; `source_utc_offset_hours` var) |
-| `loan.movement_status_id` duplicates `loan_movement` history and can disagree | history is truth; disagreement surfaced by `fact_loan.has_status_mismatch` (warn) |
-| `company.founded` is STRING in mixed formats | parsed to DATE, NULL if unparseable |
-| `fund.fund_ratio` should sum to 1 per loan; nothing enforces it | singular test (warn) |
-| `is_borrower` / `is_lender` both true; `individual` ~ `company` | one `dim_customer` with `entity_type` and `customer_role` |
-| orphaned FKs possible | `UNKNOWN` member in every dimension; facts never carry NULL keys |
+| `individual`, `company`, `insurance` use DATETIME (no zone); other tables TIMESTAMP | -> UTC with a fixed UTC+7 offset (assumed Jakarta; `source_utc_offset_hours` var) |
+| `loan.movement_status_id` and `loan_movement` both describe status | history is the source of truth; disagreement is surfaced by `fact_loan.has_status_mismatch` (warn) |
+| `company.founded` is a free STRING | three shapes parsed (`YYYY`, `YYYY-MM-DD`, `MM/YYYY`); other shapes -> NULL |
+| `fund.fund_ratio` "ratio of funds contributed by the lender" | read as the lender's share of the loan, expected to sum to 1 (warn test) |
+| `is_borrower` / `is_lender` on both `individual` and `company` | one `dim_customer` with `entity_type` and `customer_role` |
+| foreign keys may be orphaned | `UNKNOWN` member in every dimension; facts never carry NULL keys |
 
 **Gaps the task requires us to fill.** "Repayments" and a credit score are required but have no
 source table. Three minimal entities are *proposed* (kept separate in `seeds/proposed/`):
 `repayment_schedule` (expected installments; lump sum = 1 row), `repayment` (raw transfers, not
-pre-allocated), `credit_assessment` (point-in-time score).
+pre-allocated), `credit_assessment` (point-in-time score). Their columns are the minimum the
+warehouse needs, not a claim about the real system.
 
-**Key assumptions.** `loanhub_loan` = partner channeling mapping, 0..1 per loan -> every loan has
-`origination_channel` direct/partner. Payments are allocated oldest-due-first. `lender_type` is
-derived from `entity_type` (company -> institutional) pending a real master-data attribute.
-Segmentation uses only source-present attributes - no invented thresholds; the only numeric
-cut-offs are the OJK DPD buckets (current / 1-30 / 31-60 / 61-90 / >90) and the TKB90 line.
+## Assumptions (not stated in the task)
+
+- **Status vocabulary.** The spec gives `movement_status.description` with no values. The eight
+  lifecycle stages (`requested, approved, rejected, cancelled, funding, disbursed, repaid,
+  written_off`), their order and which are terminal/active are an assumed vocabulary held in one
+  mapping seed (`seeds/reference/ref_movement_status_map.csv`); unmapped descriptions surface as
+  `unmapped` plus a warn test. Replace the seed with the real descriptions - no SQL changes.
+- A loan is on book from its first `disbursed` movement until a terminal movement; `loan_movement`
+  history is the source of truth and `loan.movement_status_id` is only cross-checked.
+- `loan.created_at` is the application time. `tenor` is in months, as specified.
+- `disbursement.status`, `fund.status`, `insurance.status` and `fund_record.is_signed` are carried
+  to staging but not interpreted, because their values are unknown.
+- `loanhub_loan` is a 0..1 partner-channeling mapping; a loan without one is `DIRECT`; a
+  customer's acquisition channel is the channel of their first loan.
+- `lender_type` = `institutional` for companies, `retail` for individuals, pending a master-data attribute.
+- Payments are allocated to installments oldest-due-first with a proportional principal/interest split.
+- `seeds/reference/` (`ref_loan_type`, `ref_partner`, `ref_movement_status_map`) are placeholder
+  lookups; ids and names are not in the spec, unknown ids resolve to `unknown`.
+- Amounts are IDR; `amount_tolerance` = 1 IDR. `as_of_date` (2026-08-21) is the synthetic horizon
+  and becomes the run date in production; `dim_date` spans 2024-01-01..2028-01-01 and must cover the book.
+- DPD ageing buckets (1-30 / 31-60 / 61-90 / >90) are standard industry practice; the 90-day line
+  (TKB90) is the OJK P2P metric. Mentions of OJK or partner channels are business context, not
+  properties of the provided data.
+- Staging keeps the latest `updated_at` row per natural key as a guard against re-delivered rows;
+  identical re-touches of customer rows are dropped before SCD2 versioning.
+- Customer segmentation uses only customer attributes present in (or derived from) the sources; no
+  invented tiers or thresholds.
 
 ---
 
@@ -70,7 +93,8 @@ when the loan was requested / the funding was made. Geography is denormalized in
 `dbt snapshot` with `check_cols`.
 
 Small dims (natural keys, no SCD): `dim_date`, `dim_loan_type`, `dim_movement_status`
-(lifecycle order, terminal flags), `dim_partner` (+ `DIRECT` member).
+(assumed vocabulary mapped from raw descriptions; lifecycle order, terminal/active flags),
+`dim_partner` (+ `DIRECT` member).
 
 Physical design on BigQuery: facts partitioned by their event date and clustered by loan /
 customer via a target-aware `bq_partition` macro.
@@ -128,7 +152,7 @@ and large facts go incremental on their date partition with delete+insert over a
 pyproject.toml - uv.lock              dependencies (dbt-core, dbt-duckdb; optional dbt-bigquery)
 packages.yml                          dbt_utils
 dbt_project.yml - profiles.yml        3 vars (utc offset, as_of_date, tolerance) - duckdb/bigquery targets
-seeds/{given,proposed,reference}/     sources; generate_seeds.py
+seeds/{given,proposed,reference}/     sources (given = PDF specs, proposed = gaps, reference = placeholder lookups)
 macros/                               bq_partition only (BigQuery partition config, none on DuckDB)
 models/{staging,intermediate,warehouse,marts}/
 tests/                                singular DQ tests

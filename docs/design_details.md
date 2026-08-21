@@ -50,13 +50,13 @@ staging layer rather than silently.
 | # | Observation | Handling |
 |---|---|---|
 | 1 | `loan.movement_status_id` is **INTEGER**, but `movement_status.movement_id` is **STRING** - the FK cannot join as specified | Cast to STRING in `stg_loan`; relationship test enforces the join |
-| 2 | Most tables use **TIMESTAMP**; `individual`, `company`, `insurance` use **DATETIME** (no timezone) | Converted to UTC with a fixed UTC+7 offset (Jakarta, no DST; `source_utc_offset_hours` var) |
-| 3 | `loan.movement_status_id` duplicates what `loan_movement` history already says; the two can disagree | History is the source of truth; current status is derived from the latest movement; disagreement is surfaced by `fact_loan.has_status_mismatch` and a `warn` test |
-| 4 | `company.founded` is **STRING** | Parsed from three observed formats (`YYYY`, `YYYY-MM-DD`, `MM/YYYY`) to DATE; NULL if unparseable |
-| 5 | `fund.fund_ratio` should sum to 1.0 per loan; nothing enforces it | Singular test `assert_fund_ratio_sums_to_one` (warn) |
+| 2 | Most tables use **TIMESTAMP**; `individual`, `company`, `insurance` use **DATETIME** (no timezone) | Converted to UTC with a fixed UTC+7 offset (assumed Jakarta, no DST; `source_utc_offset_hours` var) |
+| 3 | `loan.movement_status_id` is redundant with `loan_movement` history | History is the source of truth; current status is derived from the latest movement; any disagreement is surfaced by `fact_loan.has_status_mismatch` and a `warn` test |
+| 4 | `company.founded` is a free **STRING** (no format given) | Three shapes parsed (`YYYY`, `YYYY-MM-DD`, `MM/YYYY`; the ones the synthetic data exercises); other shapes -> NULL |
+| 5 | `fund.fund_ratio` is "ratio of funds contributed by the lender" | Read as the lender's share of the loan, expected to sum to 1 - singular test (warn) |
 | 6 | `is_borrower` / `is_lender` can both be true | Unified customer dimension with `customer_role in {borrower, lender, both, none}` |
 | 7 | `individual` and `company` are near-identical tables | Conformed into one `dim_customer` with `entity_type`; company-only columns nullable |
-| 8 | `tenor` is documented in *months*, while the real products include ~14-day working-capital loans | Spec kept (months); flagged as an assumption to confirm with the source team |
+| 8 | `tenor` is documented in *months* | Followed as specified; if sub-month products exist a unit column would be needed |
 | 9 | Orphaned foreign keys are possible (e.g. a `borrower_account_id` with no customer record) | Facts never carry NULL keys: an `UNKNOWN` member row exists in every dimension |
 
 ### 1.3 Gaps the task requires us to fill - proposed source entities
@@ -78,8 +78,9 @@ separated from the given tables in `seeds/proposed/`):
 - `loan_movement` is the authoritative status history.
 - Payments are allocated to installments **oldest due first** (standard lending convention); principal/interest split of each allocation is proportional to the installment's split.
 - `lender_type` is derived from `entity_type` (company -> institutional, individual -> retail) because no source attribute exists; in production this should be a master-data attribute (OJK categorises lenders at onboarding).
-- Customer segmentation uses **only source-present attributes**; no loan-size tiers or other invented thresholds.
-- DPD buckets follow the OJK convention: current / 1-30 / 31-60 / 61-90 / >90 days; TKB90 uses the 90-day line.
+- Customer segmentation uses only customer attributes present in (or derived from) the sources; no loan-size tiers or other invented thresholds.
+- The eight lifecycle status names are an assumed vocabulary (the spec lists none), held in `seeds/reference/ref_movement_status_map.csv`.
+- DPD ageing buckets (current / 1-30 / 31-60 / 61-90 / >90 days) are standard industry practice; the 90-day line is the OJK TKB90 metric.
 - All amounts are IDR.
 - Synthetic data horizon (`as_of_date`) is 2026-08-21; in production this resolves to the run date.
 
@@ -196,8 +197,7 @@ snowflake): it is only ever reached through the customer, and a separate geograp
 would add a join to every customer query for no analytical gain.
 
 **Small dimensions** (static lookups, natural keys, no SCD): `dim_date` (generated spine
-2024-2027), `dim_loan_type` (from reference seed), `dim_movement_status` (adds
-`lifecycle_order`, `is_terminal`, `is_active_book`), `dim_partner` (observed partners plus a
+2024-01-01 to 2028-01-01; must cover the book), `dim_loan_type` (from reference seed), `dim_movement_status` (raw descriptions mapped to an assumed canonical vocabulary via a reference seed; adds `lifecycle_order`, `is_terminal`, `is_active_book`), `dim_partner` (observed partners plus a
 `DIRECT` member for non-partner loans). Every dimension also has an `UNKNOWN` member so facts
 never carry NULL keys.
 
@@ -205,10 +205,10 @@ never carry NULL keys.
 
 | Fact | Notable content | BigQuery physical design |
 |---|---|---|
-| `fact_loan` | milestone timestamps (`requested_at ... disbursed_at, closed_at`), funnel durations, `origination_channel`/`partner_id`, approval haircut, funding roll-up (`lender_count`, `fund_ratio_total`), insurance attributes, schedule/repayment totals, `outstanding_principal`, `has_status_mismatch` | partition `disbursed_date` (month) - cluster `loan_type_id, borrower_customer_id` |
+| `fact_loan` | milestone timestamps (`requested_at ... disbursed_at, closed_at`), funnel durations, `origination_channel`/`partner_id`, approval haircut, funding roll-up (`lender_count`, `fund_ratio_total`), `has_insurance`, schedule/repayment totals, `outstanding_principal`, `has_status_mismatch` | partition `disbursed_date` (month) - cluster `loan_type_id, borrower_customer_id` |
 | `fact_repayment_schedule` | due principal/interest/amount, allocated paid amounts, `fully_paid_date`, `is_paid_in_parts`, `days_late_to_full_payment`, `days_past_due_as_of` | partition `due_date` - cluster `loan_id` |
 | `fact_repayment` | `allocated_amount/principal/interest`, `days_late` (negative = early), `is_overpayment` | partition `paid_date` - cluster `loan_id` |
-| `fact_funding` | `committed_amount`, `fund_ratio`, `settled_amount`, `signed_amount`, `is_fully_settled`, `current_exposure_amount` (= share x loan outstanding) | partition `funded_date` - cluster `lender_customer_id` |
+| `fact_funding` | `committed_amount`, `fund_ratio`, `settled_amount`, `is_fully_settled`, `current_exposure_amount` (= share x loan outstanding) | partition `funded_date` - cluster `lender_customer_id` |
 | `fact_loan_daily_snapshot` | `outstanding_principal`, `overdue_amount`, `days_past_due`, `dpd_bucket`, `is_npl_90`, `is_closing_day`; rebuilt in full here, incremental by day in production | partition `snapshot_date` (day) - cluster `loan_id` |
 
 Partitioning/clustering is declared through a target-aware macro (`bq_partition`) so the same
@@ -238,18 +238,16 @@ spawn a customer version). It is the base for 4.2 and for lender-portfolio quest
 ### 4.2 `mart_credit_score_by_segment` - *average credit score per customer segment*
 
 Long format: one row per `(segment_type, segment_value)`, so any axis is a filter away. Segments
-use only source-grounded attributes: `entity_type`, `customer_role`, `origination_channel`,
-`lender_type`, `province`, `credit_grade`, `repeat_borrower`, and the combined
-`entity_x_channel`. Each row carries portfolio context (borrowers, disbursed, outstanding,
-`share_ever_npl_90`, on-time rate) so the score can be read against realised risk.
+are customer attributes present in or derived from the sources: `entity_type`, `customer_role`,
+`origination_channel`, `province`. Each row carries portfolio context (borrowers with a
+disbursement, current outstanding, `share_ever_npl_90`) so the score can be read against realised risk.
 
 | segment_type | segment_value | customers | avg_credit_score | share_ever_npl_90 |
 |---|---|---|---|---|
-| entity_x_channel | individual / direct | 74 | 664 | 0.16 |
-| entity_x_channel | individual / partner | 39 | 610 | 0.23 |
-| entity_x_channel | company / direct | 11 | 593 | 0.18 |
-| credit_grade | A | 23 | 782 | 0.13 |
-| credit_grade | E | 20 | 480 | 0.15 |
+| entity_type | individual | 150 | 641 | 0.14 |
+| entity_type | company | 30 | 633 | 0.10 |
+| origination_channel | direct | 85 | 655 | 0.17 |
+| origination_channel | partner | 43 | 619 | 0.23 |
 
 ### 4.3 `mart_delinquency` - *delinquency rates*
 
@@ -385,8 +383,8 @@ only numeric cut-offs (DPD buckets, TKB90) are regulatory.
 ## 8. Scope limits & extensions
 
 **Deliberately out of scope:** lender returns / yield (no interest ledger in any source);
-application rejection reasons (no decision table); collections workflow; insurance claims
-(premium kept as a loan attribute); intraday positions; PII treatment (names, emails, phone
+application rejection reasons (no decision table); collections workflow; insurance analytics
+(only an insurance flag is kept on the loan); intraday positions; PII treatment (names, emails, phone
 numbers and NIB are carried as-is - in production they would sit behind BigQuery policy tags /
 column-level security).
 

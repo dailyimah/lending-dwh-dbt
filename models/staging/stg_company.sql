@@ -2,7 +2,7 @@
 /*
   stg_company - company customers, ALL versions kept (SCD2 input).
   - naive DATETIME -> UTC (fixed UTC+7 offset, var source_utc_offset_hours)
-  - founded STRING in mixed formats -> DATE (NULL if unparseable)
+  - founded STRING -> DATE for three recognised shapes; other shapes -> NULL
   - drops "no-change" re-touches
 */
 with typed as (
@@ -16,10 +16,10 @@ with typed as (
         cast(is_borrower as boolean)        as is_borrower,
         cast(is_lender  as boolean)         as is_lender,
         upper(identity_card_type)           as identity_card_type,
-        case                                -- founded is STRING in mixed formats; unknown shapes -> NULL
-            when length(founded) = 4  then cast(founded || '-01-01' as date)                                   -- 'YYYY'
-            when length(founded) = 10 then cast(founded as date)                                               -- 'YYYY-MM-DD'
-            when length(founded) = 7  then cast(substr(founded, 4, 4) || '-' || substr(founded, 1, 2) || '-01' as date)  -- 'MM/YYYY'
+        case                                -- founded is a free STRING; shapes recognised: 'YYYY' | 'YYYY-MM-DD' | 'MM/YYYY'
+            when length(founded) = 4 then cast(founded || '-01-01' as date)
+            when length(founded) = 10 and substr(founded, 5, 1) = '-' and substr(founded, 8, 1) = '-' then cast(founded as date)
+            when length(founded) = 7  and substr(founded, 3, 1) = '/' then cast(substr(founded, 4, 4) || '-' || substr(founded, 1, 2) || '-01' as date)
         end                                 as founded_date,
         trim(pic_name)                      as pic_name,
         nib_number,

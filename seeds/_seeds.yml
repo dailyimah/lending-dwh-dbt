@@ -187,3 +187,10 @@ seeds:
     description: "Reference mapping for partner_id (names are not in the PDF spec; placeholder values)."
     config:
       column_types: {partner_id: varchar, partner_name: varchar, channel_type: varchar}
+  - name: ref_movement_status_map
+    description: >
+      ASSUMED status vocabulary. The spec gives movement_status.description with no values, so the
+      lifecycle stages, their order and terminal/active flags are assumptions held here. Replace
+      description_raw with the real descriptions; no SQL changes needed.
+    config:
+      column_types: {description_raw: varchar, lifecycle_stage: varchar, lifecycle_order: integer, is_terminal: boolean, is_active_book: boolean}
