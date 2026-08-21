@@ -5,15 +5,14 @@ project. Models are written for **BigQuery**; they run locally on **DuckDB** aga
 data, so the whole thing builds without credentials.
 
 ```bash
-python3 -m venv .venv && . .venv/bin/activate
-pip install dbt-core dbt-duckdb
-DBT_PROFILES_DIR=. dbt build        # seeds -> staging -> dims -> facts -> marts -> tests
+uv sync                                   # creates .venv from pyproject.toml / uv.lock
+DBT_PROFILES_DIR=. uv run dbt build       # seeds -> staging -> dims -> facts -> marts -> tests
 ```
 
 **5 facts - 5 conformed dimensions (customer = SCD Type 2) - 4 marts - 151 dbt nodes: 149 pass,
 2 intentional `warn`s that surface planted source defects.**
 Full design rationale: [`docs/design_details.md`](docs/design_details.md). Lineage and column docs:
-`dbt docs generate && dbt docs serve`.
+`uv run dbt docs generate && uv run dbt docs serve`.
 
 ---
 
@@ -125,6 +124,7 @@ check`) once sources expose current state only; large facts go incremental on th
 ## Layout
 
 ```
+pyproject.toml - uv.lock              dependencies (dbt-core, dbt-duckdb; optional dbt-bigquery)
 dbt_project.yml - profiles.yml        parameters (vars) - duckdb/bigquery targets
 seeds/{given,proposed,reference}/     sources; generate_seeds.py
 macros/                               BigQuery/DuckDB dispatch, DPD buckets, partitioning

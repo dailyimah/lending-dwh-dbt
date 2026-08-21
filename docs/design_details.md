@@ -9,7 +9,7 @@ synthetic data).
 | Stack | dbt-core 1.12 - models written for **BigQuery** - run locally on **DuckDB** (no credentials needed) |
 | Model | 5 facts - 5 conformed dimensions (customer = SCD Type 2) - 4 marts - 3 intermediate |
 | Quality | 151 dbt nodes: 149 pass, 2 intentional `warn`s that surface planted source defects |
-| Run it | `python3 -m venv .venv && . .venv/bin/activate && pip install dbt-core dbt-duckdb && DBT_PROFILES_DIR=. dbt build` |
+| Run it | `uv sync && DBT_PROFILES_DIR=. uv run dbt build` |
 
 ---
 
@@ -438,4 +438,4 @@ fazz_dwh/
     `-- diagrams/                  <- mermaid sources + PNG exports
 ```
 
-Generate docs and lineage locally with `dbt docs generate && dbt docs serve`.
+Generate docs and lineage locally with `uv run dbt docs generate && uv run dbt docs serve`.
