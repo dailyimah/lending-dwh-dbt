@@ -1,0 +1,38 @@
+flowchart LR
+    %% dbt layering. Seeds stand in for source systems (production: `sources:` on raw datasets).
+
+    subgraph RAW[seeds = source systems]
+        G["given (10 tables per PDF)"]
+        P["proposed (3 tables)"]
+        R["reference (2 lookups)"]
+    end
+
+    subgraph STG[staging - views]
+        S["stg_* (13)<br/>cast - tz->UTC - dedupe - FK type fix"]
+    end
+
+    subgraph INT[intermediate - ephemeral]
+        I1["int_customer_versions<br/>change stream + point-in-time score"]
+        I2["int_loan_milestones<br/>first time per status"]
+        I3["int_repayment_allocation<br/>oldest-due-first"]
+    end
+
+    subgraph WH[warehouse - tables]
+        D["dim_* (5)"]
+        F["fact_* (5)<br/>snapshot incremental by day"]
+    end
+
+    subgraph MT[marts - tables]
+        M["mart_* (4)"]
+    end
+
+    T["tests<br/>~125 generic + 10 singular"]
+
+    G & P --> S
+    R --> D
+    S --> I1 & I2 & I3
+    I1 --> D
+    D --> F
+    I2 & I3 --> F
+    F --> M
+    S & D & F & M -.-> T

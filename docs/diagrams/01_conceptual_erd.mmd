@@ -1,0 +1,108 @@
+erDiagram
+    %% Conceptual model of the lending business. Entities marked PROPOSED are not in the
+    %% provided specs; they are required by the task (Repayments, credit score) and are
+    %% the minimal source shapes the warehouse consumes.
+
+    CUSTOMER ||--o{ LOAN : "borrows"
+    CUSTOMER ||--o{ FUND : "lends via"
+    CUSTOMER ||--o{ CREDIT_ASSESSMENT_PROPOSED : "is scored"
+    LOAN ||--o{ LOAN_MOVEMENT : "has status history"
+    LOAN_MOVEMENT }o--|| MOVEMENT_STATUS : "refers"
+    LOAN ||--o{ DISBURSEMENT : "has"
+    LOAN ||--o| INSURANCE : "has"
+    LOAN ||--o| LOANHUB_LOAN : "maps to partner"
+    LOAN ||--o{ FUND : "funded by"
+    FUND ||--o{ FUND_RECORD : "settled via"
+    LOAN ||--o{ REPAYMENT_SCHEDULE_PROPOSED : "expects"
+    LOAN ||--o{ REPAYMENT_PROPOSED : "receives"
+    REPAYMENT_PROPOSED }o--o{ REPAYMENT_SCHEDULE_PROPOSED : "allocated to"
+
+    CUSTOMER {
+        string id PK "individual.id or company.id"
+        string entity_type "individual | company"
+        bool is_borrower
+        bool is_lender
+        string province_id
+        string city_id
+    }
+    LOAN {
+        string loan_id PK
+        string borrower_account_id FK
+        string loan_type_id
+        int tenor
+        float nominal_request
+        float nominal_loan
+        string grade
+        string repayment_mode
+        int movement_status_id "INTEGER vs STRING in lookup"
+    }
+    LOAN_MOVEMENT {
+        string id PK
+        string loan_id FK
+        string movement_id FK
+        timestamp created_at
+    }
+    MOVEMENT_STATUS {
+        string movement_id PK
+        string description
+    }
+    DISBURSEMENT {
+        string id PK
+        string loan_id FK
+        string bank_id
+        string disbursement_method
+        string status
+    }
+    LOANHUB_LOAN {
+        string id PK
+        string loan_id FK
+        string loan_reference_id
+        string partner_id
+        float partner_commission_pa
+    }
+    FUND {
+        string id PK
+        string loan_id FK
+        string lender_account_id FK
+        float nominal
+        float fund_ratio
+        string status
+    }
+    FUND_RECORD {
+        string id PK
+        string funding_id FK
+        float amount
+        bool is_settled
+        bool is_signed
+    }
+    INSURANCE {
+        string id PK
+        string loan_id FK
+        float premium
+        string vendor
+        string status
+    }
+    REPAYMENT_SCHEDULE_PROPOSED {
+        string id PK
+        string loan_id FK
+        int installment_no
+        date due_date
+        float due_principal
+        float due_interest
+        float due_amount
+    }
+    REPAYMENT_PROPOSED {
+        string id PK
+        string loan_id FK
+        string transfer_id
+        timestamp paid_at
+        float amount
+        string payment_channel
+    }
+    CREDIT_ASSESSMENT_PROPOSED {
+        string id PK
+        string customer_id FK
+        timestamp assessed_at
+        int credit_score
+        string grade
+    }
