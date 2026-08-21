@@ -72,3 +72,32 @@
     else null
   end
 {%- endmacro %}
+
+
+{#- Date spine between two literal dates (inclusive). -#}
+{% macro date_spine(start_date, end_date) -%}
+  {{ return(adapter.dispatch('date_spine', 'fazz_dwh')(start_date, end_date)) }}
+{%- endmacro %}
+
+{% macro bigquery__date_spine(start_date, end_date) -%}
+  select d as date_day from unnest(generate_date_array('{{ start_date }}', '{{ end_date }}')) as d
+{%- endmacro %}
+
+{% macro duckdb__date_spine(start_date, end_date) -%}
+  select cast(d as date) as date_day
+  from generate_series(date '{{ start_date }}', date '{{ end_date }}', interval 1 day) as t(d)
+{%- endmacro %}
+
+
+{#- ISO-ish day of week: 1 = Monday ... 7 = Sunday. -#}
+{% macro day_of_week(col) -%}
+  {{ return(adapter.dispatch('day_of_week', 'fazz_dwh')(col)) }}
+{%- endmacro %}
+
+{% macro bigquery__day_of_week(col) -%}
+  mod(extract(dayofweek from {{ col }}) + 5, 7) + 1
+{%- endmacro %}
+
+{% macro duckdb__day_of_week(col) -%}
+  isodow({{ col }})
+{%- endmacro %}

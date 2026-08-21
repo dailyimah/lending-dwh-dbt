@@ -177,3 +177,13 @@ seeds:
         assessed_at: timestamp
         credit_score: integer
         grade: varchar
+
+  # ------------------------------------------------------------ reference (genuine seed use)
+  - name: ref_loan_type
+    description: "Reference mapping for loan_type_id (names are not in the PDF spec; placeholder values)."
+    config:
+      column_types: {loan_type_id: varchar, loan_type_name: varchar, loan_type_group: varchar}
+  - name: ref_partner
+    description: "Reference mapping for partner_id (names are not in the PDF spec; placeholder values)."
+    config:
+      column_types: {partner_id: varchar, partner_name: varchar, channel_type: varchar}

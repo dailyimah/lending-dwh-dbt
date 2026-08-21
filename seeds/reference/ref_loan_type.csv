@@ -1,0 +1,4 @@
+loan_type_id,loan_type_name,loan_type_group
+LT01,personal,consumer
+LT02,business,msme
+LT03,agent_working_capital,msme

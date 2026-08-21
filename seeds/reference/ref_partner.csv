@@ -1,0 +1,4 @@
+partner_id,partner_name,channel_type
+PTR-AGEN,Agent network partner (placeholder),partner
+PTR-ECOM,E-commerce partner (placeholder),partner
+PTR-FIN,Fintech partner (placeholder),partner

@@ -1,0 +1,55 @@
+version: 2
+
+models:
+  - name: dim_customer
+    description: >
+      Unified customer dimension (individual + company), SCD Type 2. One row per customer version.
+      Key customer_key = customer_id#sequence_no. Type-2 columns: customer_role, is_borrower, is_lender,
+      identity_card_type, geography, credit_score. Type-1: name, email, phone, founded_date, pic_name, nib_number.
+    tests:
+      - unique_combination:
+          combination_of_columns: [customer_id, sequence_no]
+      - unique_combination:
+          combination_of_columns: [customer_id, valid_from]
+    columns:
+      - name: customer_key
+        tests: [unique, not_null]
+      - name: customer_id
+        tests: [not_null]
+      - name: entity_type
+        tests:
+          - accepted_values: {values: ['individual', 'company', 'unknown']}
+      - name: customer_role
+        tests:
+          - accepted_values: {values: ['borrower', 'lender', 'both', 'none']}
+      - name: lender_type
+        tests:
+          - accepted_values: {values: ['retail', 'institutional']}
+      - name: origination_channel
+        tests:
+          - accepted_values: {values: ['direct', 'partner']}
+      - name: valid_from
+        tests: [not_null]
+      - name: valid_to
+        tests: [not_null]
+  - name: dim_date
+    columns:
+      - name: date_day
+        tests: [unique, not_null]
+  - name: dim_loan_type
+    columns:
+      - name: loan_type_id
+        tests: [unique, not_null]
+  - name: dim_movement_status
+    columns:
+      - name: movement_id
+        tests: [unique, not_null]
+      - name: status_name
+        tests: [unique, not_null]
+  - name: dim_partner
+    columns:
+      - name: partner_id
+        tests: [unique, not_null]
+      - name: channel_type
+        tests:
+          - accepted_values: {values: ['direct', 'partner', 'unknown']}
