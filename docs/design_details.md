@@ -11,8 +11,6 @@ synthetic data).
 | Quality | 151 dbt nodes: 149 pass, 2 intentional `warn`s that surface planted source defects |
 | Run it | `python3 -m venv .venv && . .venv/bin/activate && pip install dbt-core dbt-duckdb && DBT_PROFILES_DIR=. dbt build` |
 
-Plain (Jinja-free) SQL for every model is in [`docs/compiled_sql/`](docs/compiled_sql/) for readers who do not use dbt.
-
 ---
 
 ## Contents
@@ -436,10 +434,8 @@ fazz_dwh/
 |-- macros/                        <- dialect dispatch (BigQuery/DuckDB), DPD buckets, partitioning
 |-- models/{staging,intermediate,warehouse,marts}/
 |-- tests/                         <- singular DQ tests + generic test definitions
-|-- scripts/export_compiled_sql.sh
 `-- docs/
-    |-- diagrams/                  <- mermaid sources
-    `-- compiled_sql/              <- Jinja-free SQL per model (generated)
+    `-- diagrams/                  <- mermaid sources + PNG exports
 ```
 
 Generate docs and lineage locally with `dbt docs generate && dbt docs serve`.

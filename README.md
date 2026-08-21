@@ -12,8 +12,8 @@ DBT_PROFILES_DIR=. dbt build        # seeds -> staging -> dims -> facts -> marts
 
 **5 facts - 5 conformed dimensions (customer = SCD Type 2) - 4 marts - 151 dbt nodes: 149 pass,
 2 intentional `warn`s that surface planted source defects.**
-Plain SQL per model: [`docs/compiled_sql/`](docs/compiled_sql/). Full design rationale:
-[`docs/design_details.md`](docs/design_details.md).
+Full design rationale: [`docs/design_details.md`](docs/design_details.md). Lineage and column docs:
+`dbt docs generate && dbt docs serve`.
 
 ---
 
@@ -130,5 +130,5 @@ seeds/{given,proposed,reference}/     sources; generate_seeds.py
 macros/                               BigQuery/DuckDB dispatch, DPD buckets, partitioning
 models/{staging,intermediate,warehouse,marts}/
 tests/                                singular DQ tests, generic test defs
-docs/{diagrams,compiled_sql,design_details.md}
+docs/{diagrams,design_details.md}
 ```
