@@ -5,7 +5,9 @@
 
 A dbt project for a P2P lending warehouse: BigQuery-style SQL, run locally on DuckDB against
 synthetic seeds, so it builds with no credentials. 5 facts, 5 conformed dimensions (customer is
-SCD Type 2), 4 marts. `dbt build` is green; the only two warnings are planted source defects.
+SCD Type 2), 4 marts. All transformations are dbt models under `models/` - `staging` (cleaning),
+`intermediate` (allocation, milestones), `warehouse` (dims and facts), `marts` - with tests in
+their `.yml` files and `tests/`. `dbt build` is green; the only two warnings are planted source defects.
 
 ```bash
 uv sync && uv run dbt deps
@@ -16,6 +18,17 @@ Lineage and column docs: `uv run dbt docs generate && uv run dbt docs serve`.
 Design notes (spec findings, assumptions, trade-offs): [docs/design_details.md](docs/design_details.md).
 
 ## Model
+
+The business entities: customers (individuals and companies, who can borrow, lend, or both),
+loans, the loan's status history, disbursement, insurance, partner mapping, lender fundings with
+their settlement records, and - proposed, since the specs omit them - repayment schedules,
+repayments and credit assessments. One customer has many loans and many fundings; one loan has
+many status movements, fundings, scheduled installments and repayments.
+
+![entities](docs/diagrams/01_conceptual_erd.png)
+
+The dimensional model: five facts around conformed dimensions, each dimension shared by every
+fact that needs it so new marts can be added without remodeling.
 
 ![star schema](docs/diagrams/02_dimensional_model.png)
 

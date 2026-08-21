@@ -45,7 +45,10 @@ table. Minimal shapes, kept in
 - DPD buckets (1-30 / 31-60 / 61-90 / >90) are standard ageing; the 90-day line is the OJK TKB90
   metric.
 
-## Bus matrix
+## Entities and bus matrix
+
+![conceptual ERD](diagrams/01_conceptual_erd.png)
+
 
 | Process -> fact | dim_customer | dim_date | dim_loan_type | dim_movement_status | dim_partner |
 |---|:-:|:-:|:-:|:-:|:-:|
