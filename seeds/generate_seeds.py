@@ -48,11 +48,18 @@ def rand_date(a=START, b=END):
 
 
 def ts(d, h=None):
-    """UTC timestamp string (TIMESTAMP columns)."""
+    """UTC timestamp string (TIMESTAMP columns). Accepts a date or a datetime."""
+    if isinstance(d, datetime):
+        return d.strftime("%Y-%m-%dT%H:%M:%SZ")
     h = random.randint(0, 23) if h is None else h
     return datetime(d.year, d.month, d.day, h, random.randint(0, 59), random.randint(0, 59)).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )
+
+
+def step(dt, days):
+    """Advance a datetime by `days` plus 1-6 hours so lifecycle events are strictly increasing."""
+    return dt + timedelta(days=days, hours=random.randint(1, 6), minutes=random.randint(0, 59))
 
 
 def dt_naive(d, h=None):
@@ -205,22 +212,22 @@ for n in range(300):
     approved_amt = req if random.random() < 0.7 else round(req * random.choice([0.5, 0.6, 0.75, 0.8, 0.9]))
 
     requested = rand_date()
-    # lifecycle path
+    # lifecycle path - event datetimes are strictly increasing within a loan
     path = random.choices(
         ["rejected", "cancelled", "in_progress", "disbursed"], weights=[8, 3, 5, 84])[0]
-    events = [("requested", requested)]
-    t = requested
+    t = datetime(requested.year, requested.month, requested.day, random.randint(6, 14), random.randint(0, 59))
+    events = [("requested", t)]
     if path == "rejected":
-        t += timedelta(days=random.randint(1, 3)); events.append(("rejected", t))
+        t = step(t, random.randint(1, 3)); events.append(("rejected", t))
     elif path == "cancelled":
-        t += timedelta(days=random.randint(1, 2)); events.append(("approved", t))
-        t += timedelta(days=random.randint(1, 5)); events.append(("cancelled", t))
+        t = step(t, random.randint(1, 2)); events.append(("approved", t))
+        t = step(t, random.randint(1, 5)); events.append(("cancelled", t))
     else:
-        t += timedelta(days=random.randint(0, 3)); events.append(("approved", t))
-        t += timedelta(days=random.randint(0, 2)); events.append(("funding", t))
+        t = step(t, random.randint(0, 3)); events.append(("approved", t))
+        t = step(t, random.randint(0, 2)); events.append(("funding", t))
         if path == "disbursed" or (path == "in_progress" and random.random() < 0.3):
-            t += timedelta(days=random.randint(0, 4)); events.append(("disbursed", t))
-    disbursed_on = next((d for s, d in events if s == "disbursed"), None)
+            t = step(t, random.randint(0, 4)); events.append(("disbursed", t))
+    disbursed_on = next((d.date() for s, d in events if s == "disbursed"), None)
     if disbursed_on and disbursed_on > END:
         disbursed_on = END
     maturity = add_months(disbursed_on, tenor) if disbursed_on else None
@@ -267,7 +274,7 @@ for n in range(300):
         "grade": grade,
         "repayment_mode": mode,
         "movement_status_id": STATUS_ID[latest_status],      # INTEGER (planted type mismatch)
-        "created_at": ts(requested),
+        "created_at": ts(events[0][1]),
         "updated_at": ts(events[-1][1]),
     })
 
@@ -296,7 +303,7 @@ for n in range(300):
             "id": uid(), "loan_id": lid, "loan_reference_id": f"EXT-{random.randint(100000, 999999)}",
             "partner_id": "PTR-AGEN" if ltype == "LT03" else random.choice(PARTNERS[1:]),
             "partner_commission_pa": random.choice([0.02, 0.03, 0.04, 0.05]),
-            "created_at": ts(requested), "updated_at": ts(requested),
+            "created_at": ts(events[0][1]), "updated_at": ts(events[0][1]),
         })
 
     # funding: 1-4 lenders, ratios sum to 1
@@ -304,7 +311,7 @@ for n in range(300):
     chosen = random.sample(lenders, k)
     cuts = sorted(random.sample(range(5, 95), k - 1)) if k > 1 else []
     ratios = [(b - a) / 100 for a, b in zip([0] + cuts, cuts + [100])]
-    funding_day = next(d for s, d in events if s == "funding")
+    funding_day = next(d.date() for s, d in events if s == "funding")
     for (lender_id, _), r in zip(chosen, ratios):
         fid = uid()
         nominal = round(approved_amt * r, 2)

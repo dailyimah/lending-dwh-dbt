@@ -5,9 +5,10 @@
   history. loan.movement_status_id is kept alongside so disagreement can be tested.
 */
 with mv as (
-    select m.loan_id, m.moved_at, s.status_name
+    select m.loan_id, m.moved_at, s.status_name, d.lifecycle_order
     from {{ ref('stg_loan_movement') }} m
     join {{ ref('stg_movement_status') }} s on s.movement_id = m.movement_id
+    join {{ ref('dim_movement_status') }} d on d.movement_id = m.movement_id
 ),
 pivoted as (
     select
@@ -26,7 +27,8 @@ pivoted as (
 ),
 latest as (
     select loan_id, status_name as current_status_name,
-           row_number() over (partition by loan_id order by moved_at desc) as rn
+           -- latest by time; identical timestamps resolved by lifecycle order (defensive)
+           row_number() over (partition by loan_id order by moved_at desc, lifecycle_order desc) as rn
     from mv
 )
 select
