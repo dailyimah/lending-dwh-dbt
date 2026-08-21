@@ -1,0 +1,106 @@
+version: 2
+
+models:
+  - name: stg_loan
+    description: "One row per loan (latest). movement_status_id cast INTEGER->STRING to fix the FK type mismatch."
+    columns:
+      - name: loan_id
+        tests: [unique, not_null]
+      - name: borrower_customer_id
+        tests: [not_null]
+      - name: repayment_mode
+        tests:
+          - accepted_values: {values: ['installment', 'lump_sum']}
+      - name: current_movement_id
+        tests:
+          - relationships: {to: ref('stg_movement_status'), field: movement_id}
+  - name: stg_loan_movement
+    columns:
+      - name: loan_movement_id
+        tests: [unique, not_null]
+      - name: loan_id
+        tests:
+          - not_null
+          - relationships: {to: ref('stg_loan'), field: loan_id}
+      - name: movement_id
+        tests:
+          - relationships: {to: ref('stg_movement_status'), field: movement_id}
+  - name: stg_movement_status
+    columns:
+      - name: movement_id
+        tests: [unique, not_null]
+      - name: status_name
+        tests:
+          - accepted_values: {values: ['requested','approved','rejected','funding','disbursed','repaid','written_off','cancelled']}
+  - name: stg_disbursement
+    columns:
+      - name: disbursement_id
+        tests: [unique, not_null]
+      - name: loan_id
+        tests:
+          - relationships: {to: ref('stg_loan'), field: loan_id}
+  - name: stg_loanhub_loan
+    columns:
+      - name: loan_id
+        tests:
+          - unique
+          - relationships: {to: ref('stg_loan'), field: loan_id}
+  - name: stg_fund
+    columns:
+      - name: fund_id
+        tests: [unique, not_null]
+      - name: loan_id
+        tests:
+          - relationships: {to: ref('stg_loan'), field: loan_id}
+  - name: stg_fund_record
+    columns:
+      - name: fund_record_id
+        tests: [unique, not_null]
+      - name: fund_id
+        tests:
+          - relationships: {to: ref('stg_fund'), field: fund_id}
+  - name: stg_insurance
+    columns:
+      - name: loan_id
+        tests:
+          - unique
+          - relationships: {to: ref('stg_loan'), field: loan_id}
+  - name: stg_individual
+    description: "All customer versions kept (SCD2 input); only no-change re-touches dropped."
+    tests:
+      - unique_combination:
+          combination_of_columns: [customer_id, source_updated_at]
+    columns:
+      - name: customer_id
+        tests: [not_null]
+  - name: stg_company
+    tests:
+      - unique_combination:
+          combination_of_columns: [customer_id, source_updated_at]
+    columns:
+      - name: customer_id
+        tests: [not_null]
+  - name: stg_repayment_schedule
+    description: "PROPOSED source."
+    tests:
+      - unique_combination:
+          combination_of_columns: [loan_id, installment_no]
+    columns:
+      - name: schedule_id
+        tests: [unique, not_null]
+      - name: loan_id
+        tests:
+          - relationships: {to: ref('stg_loan'), field: loan_id}
+  - name: stg_repayment
+    description: "PROPOSED source."
+    columns:
+      - name: repayment_id
+        tests: [unique, not_null]
+      - name: loan_id
+        tests:
+          - relationships: {to: ref('stg_loan'), field: loan_id}
+  - name: stg_credit_assessment
+    description: "PROPOSED source."
+    columns:
+      - name: credit_assessment_id
+        tests: [unique, not_null]
