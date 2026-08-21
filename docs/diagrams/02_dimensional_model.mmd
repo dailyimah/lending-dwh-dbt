@@ -1,41 +1,35 @@
 flowchart LR
-    %% Star schema: five facts share conformed dimensions. dim_customer plays two roles
-    %% (borrower, lender). Geography is denormalized into dim_customer.
+    %% Star schema, drawn by rule rather than by edge: the shared dimensions feed every fact;
+    %% only the exceptions are drawn individually. Marts list the facts they read.
 
-    subgraph DIMS[Conformed dimensions]
-        DC[("dim_customer<br/>SCD2 - customer_key = id#seq<br/>entity_type, role, lender_type,<br/>channel, geography, credit_score")]
+    subgraph SHARED[Dimensions used by every fact]
+        direction TB
+        DC[("dim_customer (SCD2)<br/>as borrower")]
         DD[("dim_date")]
         DLT[("dim_loan_type")]
-        DMS[("dim_movement_status<br/>lifecycle_order, is_terminal")]
-        DP[("dim_partner<br/>DIRECT + partners")]
+        DP[("dim_partner")]
     end
 
+    DMS[("dim_movement_status")]
+
     subgraph FACTS[Facts]
-        FL["fact_loan<br/>accumulating snapshot - 1 row / loan<br/>milestones, outstanding, roll-ups"]
-        FRS["fact_repayment_schedule<br/>1 row / expected installment"]
-        FR["fact_repayment<br/>1 row / payment applied to installment"]
-        FF["fact_funding<br/>1 row / lender commitment to loan"]
-        FS["fact_loan_daily_snapshot<br/>1 row / active loan / day<br/>outstanding, DPD, bucket"]
+        direction TB
+        FL["fact_loan<br/>1 row per loan"]
+        FRS["fact_repayment_schedule<br/>1 row per expected installment"]
+        FR["fact_repayment<br/>1 row per payment applied to an installment"]
+        FF["fact_funding<br/>1 row per lender commitment"]
+        FS["fact_loan_daily_snapshot<br/>1 row per active loan per day"]
     end
 
     subgraph MARTS[Marts]
-        M360["mart_customer_360"]
-        MCS["mart_credit_score_by_segment"]
-        MD["mart_delinquency"]
-        MLP["mart_loan_performance"]
+        direction TB
+        M360["mart_customer_360<br/>reads: all facts"]
+        MCS["mart_credit_score_by_segment<br/>reads: customer_360"]
+        MD["mart_delinquency<br/>reads: daily snapshot"]
+        MLP["mart_loan_performance<br/>reads: loan, schedule, snapshot"]
     end
 
-    DC -- borrower_customer_key --> FL
-    DC -- borrower_customer_key --> FRS
-    DC -- borrower_customer_key --> FR
-    DC -- lender_customer_key --> FF
-    DC -- borrower_customer_key --> FS
-    DD --> FL & FRS & FR & FF & FS
-    DLT --> FL & FRS & FR & FF & FS
+    SHARED ==> FACTS
+    DC -. "as lender" .-> FF
     DMS --> FL
-    DP --> FL & FRS & FR & FF & FS
-
-    FL & FRS & FF & FS --> M360
-    M360 --> MCS
-    FS --> MD
-    FL & FRS & FS --> MLP
+    FACTS ==> MARTS
