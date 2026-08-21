@@ -25,6 +25,8 @@ nav() {  # $1 = current page key: home | details
       -e 's#https://github.com/dailyimah/lending-dwh-dbt/blob/main/docs/design_details.md#design_details.html#g' \
       -e 's#https://github.com/dailyimah/lending-dwh-dbt/tree/main/docs/diagrams#diagrams/#g' \
       -e 's#](docs/diagrams/#](diagrams/#g' \
+      -e 's#](seeds/reference/#](https://github.com/dailyimah/lending-dwh-dbt/blob/main/seeds/reference/#g' \
+      -e 's#](seeds/proposed)#](https://github.com/dailyimah/lending-dwh-dbt/tree/main/seeds/proposed)#g' \
       -e 's#](docs/design_details.md#](design_details.md#g' \
       -e 's#Lineage and column docs:.*$#Lineage and column docs: [dbt docs](dbt/).#' \
       README.md
