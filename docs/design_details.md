@@ -218,7 +218,7 @@ models run on DuckDB locally and are partitioned on BigQuery.
 
 ## 4. Data marts
 
-Marts read **only** from the warehouse layer (dims and facts), as the task requires. Row counts
+Marts are built on the warehouse layer (dims and facts); `mart_credit_score_by_segment` rolls up the customer-grain `mart_customer_360` rather than repeating its aggregation. Row counts
 below are from the synthetic run as of 2026-08-21.
 
 ### 4.1 `mart_customer_360` - one row per current customer
@@ -283,7 +283,7 @@ Grain: `disbursement_cohort x loan_type x partner x grade x repayment_mode`. Vol
 
 ```mermaid
 flowchart LR
-    RAW["seeds = sources<br/>10 given - 3 proposed - 2 reference"] --> STG["staging (13 views)<br/>cast - tz->UTC - dedupe - FK fix"]
+    RAW["seeds = sources<br/>10 given - 3 proposed - 3 reference"] --> STG["staging (13 views)<br/>cast - tz->UTC - dedupe - FK fix"]
     STG --> INT["intermediate (ephemeral)<br/>customer change stream -<br/>loan milestones - payment allocation"]
     INT --> WH["warehouse<br/>5 dims - 5 facts"]
     WH --> MT["marts (4)"]

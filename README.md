@@ -101,12 +101,12 @@ customer via a target-aware `bq_partition` macro.
 
 ---
 
-## 3. Data marts (built only from dims + facts)
+## 3. Data marts (built on the dims + facts; the segment mart rolls up the customer-grain mart)
 
 | Mart | Grain | Answers |
 |---|---|---|
 | `mart_customer_360` | current customer | borrower metrics (volumes, outstanding, `max_dpd_ever`, on-time rate) + lender metrics (commitments, exposure); base for the two below and for lender concentration |
-| `mart_credit_score_by_segment` | segment_type x segment_value | **avg credit score per segment** (entity type, role, channel, lender type, province, grade, repeat, entityxchannel) with realised-risk context |
+| `mart_credit_score_by_segment` | segment_type x segment_value | **avg credit score per segment** (entity type, role, channel, province) with realised-risk context |
 | `mart_delinquency` | day x loan type x partner x grade | **delinquency rates**: outstanding by DPD bucket, delinquency rate, PAR30, NPL90, **TKB90** |
 | `mart_loan_performance` | disbursement cohort x type x partner x grade x mode | **loan performance**: volumes, outcomes, collections, write-off rates, 30DPD-within-90d vintage |
 
