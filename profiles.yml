@@ -1,11 +1,11 @@
 # Local development / review target: DuckDB (no credentials needed).
 # Production target: BigQuery (documented; not runnable here without credentials).
-fazz_dwh:
+lending_dwh:
   target: dev
   outputs:
     dev:
       type: duckdb
-      path: fazz_dwh.duckdb
+      path: lending_dwh.duckdb
       threads: 4
       settings:
         TimeZone: UTC
@@ -13,6 +13,6 @@ fazz_dwh:
       type: bigquery
       method: oauth
       project: fazz-data-platform        # placeholder
-      dataset: fazz_dwh
+      dataset: lending_dwh
       location: asia-southeast2          # Jakarta
       threads: 8

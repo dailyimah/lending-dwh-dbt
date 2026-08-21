@@ -714,7 +714,7 @@ wheels = [
 ]
 
 [[package]]
-name = "fazz-dwh"
+name = "lending-dwh-dbt"
 version = "1.0.0"
 source = { virtual = "." }
 dependencies = [

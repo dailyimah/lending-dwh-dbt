@@ -1,5 +1,5 @@
 [project]
-name = "fazz-dwh"
+name = "lending-dwh-dbt"
 version = "1.0.0"
 description = "Fazz Data Engineer case study - lending data warehouse (dbt, BigQuery-targeted, runs locally on DuckDB)"
 requires-python = ">=3.10"

@@ -1,7 +1,7 @@
-name: fazz_dwh
+name: lending_dwh
 version: 1.0.0
 config-version: 2
-profile: fazz_dwh
+profile: lending_dwh
 
 model-paths: ["models"]
 seed-paths: ["seeds"]
@@ -14,7 +14,7 @@ vars:
   amount_tolerance: 1                  # IDR rounding tolerance for "fully paid" / "fully settled" flags
 
 models:
-  fazz_dwh:
+  lending_dwh:
     staging:
       +materialized: view
       +schema: staging
@@ -28,5 +28,5 @@ models:
       +schema: marts
 
 seeds:
-  fazz_dwh:
+  lending_dwh:
     +schema: raw
