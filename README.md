@@ -73,10 +73,7 @@ customer via a target-aware `bq_partition` macro.
 | `mart_delinquency` | day x loan type x partner x grade | **delinquency rates**: outstanding by DPD bucket, delinquency rate, PAR30, NPL90, **TKB90** |
 | `mart_loan_performance` | disbursement cohort x type x partner x grade x mode | **loan performance**: volumes, outcomes, collections, write-off rates, 30DPD-within-90d vintage |
 
-Sample (synthetic, as of 2026-08-21):
-
-| channel | loans_active | outstanding (IDR M) | delinquency_rate | par30 | tkb90 |
-|---|---|---|---|---|---|
+---|---|---|---|---|---|
 | direct | 45 | 314.9 | 0.323 | 0.161 | 0.908 |
 | partner | 24 | 115.9 | 0.405 | 0.282 | 0.943 |
 
@@ -112,12 +109,9 @@ and large facts go incremental on their date partition with delete+insert over a
 ## Layout
 
 ```
-pyproject.toml - uv.lock              dependencies (dbt-core, dbt-duckdb; optional dbt-bigquery)
-packages.yml                          dbt_utils
-dbt_project.yml - profiles.yml        3 vars (utc offset, as_of_date, tolerance) - duckdb/bigquery targets
-seeds/{given,proposed,reference}/     sources (given = PDF specs, proposed = gaps, reference = placeholder lookups)
-macros/                               bq_partition only (BigQuery partition config, none on DuckDB)
+dbt_project.yml, profiles.yml      3 vars; duckdb (local) and bigquery (prod) targets
+seeds/{given,proposed,reference}/  PDF tables / proposed gaps / placeholder lookups
 models/{staging,intermediate,warehouse,marts}/
-tests/                                singular DQ tests
-docs/{diagrams,design_details.md}
+tests/                             singular data-quality tests
+docs/                              design_details.md, diagrams/
 ```
